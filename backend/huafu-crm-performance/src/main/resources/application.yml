@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: huafu-crm-performance
+  datasource:
+    url: jdbc:postgresql://localhost:5432/huafu_crm
+    username: huafu
+    password: huafu_dev_only
+  flyway:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+server:
+  port: 8083
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0

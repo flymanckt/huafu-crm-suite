@@ -1,0 +1,36 @@
+# Maven / Java build outputs
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Logs
+logs/
+*.log
+
+# Runtime / temp
+*.pid
+*.tmp
+*.swp
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+application-prod.yml
+application-prod.yaml
+
+# OS / tooling
+.mvn/.maven.config

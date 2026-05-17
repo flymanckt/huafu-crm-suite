@@ -1,0 +1,127 @@
+/* 全局样式 - 华孚时尚CRM */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 通用卡片阴影 */
+.page-card {
+  background: #fff;
+  border-radius: 4px;
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* 统计卡片 */
+.stat-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
+  transition: transform 0.3s;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+.stat-card .stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #303133;
+  line-height: 1.2;
+}
+.stat-card .stat-label {
+  font-size: 14px;
+  color: #909399;
+  margin-top: 8px;
+}
+
+/* 搜索栏 */
+.search-bar {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* 表格操作列 */
+.table-operations .el-button {
+  padding: 4px 8px;
+}
+
+/* 数据列表独立滚动区 */
+.data-table {
+  width: 100%;
+}
+.data-table .el-scrollbar__bar.is-vertical {
+  display: block;
+}
+
+/* el-tabs left-position 强制水平布局覆盖 */
+.el-tabs.el-tabs--left {
+  flex-direction: row !important;
+}
+.el-tabs.el-tabs--left .el-tabs__header {
+  flex-direction: column !important;
+  margin-right: 0 !important;
+}
+.el-tabs.el-tabs--left .el-tabs__content {
+  flex: 1 !important;
+}
+.el-tabs.el-tabs--left .el-tabs__nav-wrap {
+  height: auto !important;
+  width: 160px !important;
+}
+.el-tabs.el-tabs--left .el-tabs__nav {
+  flex-direction: column !important;
+  width: 100% !important;
+}
+.el-tabs.el-tabs--left .el-tabs__item {
+  width: 100% !important;
+  height: 50px !important;
+  line-height: 50px !important;
+  text-align: left !important;
+  padding: 0 16px !important;
+}
+
+/* el-dialog z-index 层叠修复
+   确保对话框在遮罩层之上，所有弹层元素不被意外覆盖
+   Bugfix: Element Plus dialog/drawer teleport被父容器overflow:hidden裁剪，
+   强制position:fixed确保弹窗不被裁剪 */
+.el-overlay {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000 !important;
+}
+.el-dialog {
+  z-index: 2001 !important;
+}
+.el-message-box {
+  z-index: 2002 !important;
+}
+.el-overlay .el-popper {
+  z-index: 2010 !important;
+}

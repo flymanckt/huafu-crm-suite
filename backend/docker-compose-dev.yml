@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: huafu-crm-postgres
+    environment:
+      POSTGRES_DB: huafu_crm
+      POSTGRES_USER: huafu
+      POSTGRES_PASSWORD: huafu_dev_only
+    ports: ["5432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U huafu -d huafu_crm"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+  redis:
+    image: redis:7-alpine
+    container_name: huafu-crm-redis
+    ports: ["6379:6379"]
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: huafu-crm-nacos
+    environment:
+      MODE: standalone
+    ports: ["8848:8848", "9848:9848"]
+  # RocketMQ is documented but not enabled in Phase 0 because callback/AI consumers are placeholders.
+  # Enable broker/namesrv after message contracts are finalized and image tags are pinned for the target environment.
+  # rocketmq-namesrv:
+  #   image: apache/rocketmq:5.3.0
+  #   command: sh mqnamesrv
+  #   ports: ["9876:9876"]
+volumes:
+  postgres-data:

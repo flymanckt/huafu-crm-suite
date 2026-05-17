@@ -1,0 +1,32 @@
+# Build outputs
+**/target/
+frontend/dist/
+frontend/node_modules/
+
+# Runtime logs and local process files
+logs/
+*.log
+*.pid
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Test and coverage outputs
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp

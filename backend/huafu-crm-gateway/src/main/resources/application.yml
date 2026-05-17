@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: huafu-crm-gateway
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: false
+            maxAge: 3600
+      routes:
+        - id: customer-contact
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/customer-contact/**
+          filters:
+            - StripPrefix=1
+        - id: customer
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/customer/**,/api/crm/**
+          filters:
+            - StripPrefix=1
+        - id: opportunity
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/opportunity/**,/api/lead/**,/api/lost-order/**,/api/quote/**
+          filters:
+            - StripPrefix=1
+        - id: performance
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/visit-record/**,/api/daily-report/**,/api/performance/**
+          filters:
+            - StripPrefix=1
+        - id: target
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/target/**
+          filters:
+            - StripPrefix=1
+        - id: ai
+          uri: http://localhost:8085
+          predicates:
+            - Path=/api/ai/**,/api/ai-parse/**
+          filters:
+            - StripPrefix=1
+        - id: wecom
+          uri: http://localhost:8086
+          predicates:
+            - Path=/api/wecom/**
+          filters:
+            - StripPrefix=1
+        - id: auth
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=1
+        - id: admin
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - StripPrefix=1
+server:
+  port: 8080
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

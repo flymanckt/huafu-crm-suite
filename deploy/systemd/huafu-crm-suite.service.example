@@ -1,0 +1,15 @@
+[Unit]
+Description=Huafu CRM Suite
+After=network.target postgresql.service
+
+[Service]
+Type=forking
+User=kent
+WorkingDirectory=/home/kent/.hermes/profiles/dev/workspace/huafu-crm-suite
+ExecStart=/home/kent/.hermes/profiles/dev/workspace/huafu-crm-suite/scripts/start-services.sh
+ExecStop=/home/kent/.hermes/profiles/dev/workspace/huafu-crm-suite/scripts/stop-services.sh
+RemainAfterExit=yes
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
