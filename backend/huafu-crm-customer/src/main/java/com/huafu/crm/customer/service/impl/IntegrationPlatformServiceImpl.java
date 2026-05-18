@@ -23,6 +23,7 @@ import com.huafu.crm.customer.mapper.IntegrationLogMapper;
 import com.huafu.crm.customer.mapper.SapRfcConfigMapper;
 import com.huafu.crm.customer.service.IntegrationPlatformService;
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,9 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class IntegrationPlatformServiceImpl implements IntegrationPlatformService {
+    private static final Set<String> SAP_PROTOCOLS = Set.of("SAP_RFC", "SAP_ODATA", "SAP_IDOC");
+    private static final Set<String> GENERIC_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SFTP", "FTP", "DATABASE", "KAFKA", "RABBITMQ", "CUSTOM");
+
     private final IntegrationConnectionConfigMapper connectionMapper;
     private final SapRfcConfigMapper sapRfcConfigMapper;
     private final IntegrationInterfaceMapper interfaceMapper;
@@ -206,6 +210,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Override
     @Transactional
     public IntegrationInterface saveInterface(IntegrationInterfaceDTO dto) {
+        validateInterfaceConfig(dto);
         if (existsInterfaceCode(dto.interfaceCode(), null)) {
             throw new BizException(1001, "接口编码已存在：" + dto.interfaceCode());
         }
@@ -222,6 +227,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Transactional
     public IntegrationInterface updateInterface(Long id, IntegrationInterfaceDTO dto) {
         IntegrationInterface entity = requireInterface(id);
+        validateInterfaceConfig(dto);
         if (existsInterfaceCode(dto.interfaceCode(), id)) {
             throw new BizException(1001, "接口编码已存在：" + dto.interfaceCode());
         }
@@ -373,6 +379,32 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         entity.setRetryLimit(dto.retryLimit() == null ? 3 : dto.retryLimit());
         entity.setDescription(InputSanitizer.safeText(dto.description()));
         return entity;
+    }
+
+    private void validateInterfaceConfig(IntegrationInterfaceDTO dto) {
+        String protocol = StringUtils.hasText(dto.protocol()) ? dto.protocol().trim() : "";
+        if (!SAP_PROTOCOLS.contains(protocol) && !GENERIC_PROTOCOLS.contains(protocol)) {
+            throw new BizException(1001, "不支持的接口协议：" + dto.protocol());
+        }
+        if (!StringUtils.hasText(dto.connectionCode())) {
+            throw new BizException(1001, SAP_PROTOCOLS.contains(protocol) ? "SAP接口需要选择SAP连接配置" : "通用接口需要选择连接配置");
+        }
+        if (SAP_PROTOCOLS.contains(protocol)) {
+            if ("SAP_RFC".equals(protocol) && !StringUtils.hasText(dto.sapFunctionName())) {
+                throw new BizException(1001, "SAP RFC接口需要填写RFC/BAPI函数名");
+            }
+            if ("SAP_IDOC".equals(protocol) && !StringUtils.hasText(dto.sapFunctionName())) {
+                throw new BizException(1001, "SAP IDoc接口需要填写IDoc或消息类型");
+            }
+            if ("SAP_ODATA".equals(protocol)
+                && (!StringUtils.hasText(dto.sapFunctionName()) || !StringUtils.hasText(dto.endpointPath()))) {
+                throw new BizException(1001, "SAP OData接口需要填写OData对象和OData路径");
+            }
+            return;
+        }
+        if (!StringUtils.hasText(dto.httpMethod()) || !StringUtils.hasText(dto.endpointPath())) {
+            throw new BizException(1001, "通用接口需要填写HTTP方法和接口路径");
+        }
     }
 
     private IntegrationConnectionConfig toConnection(IntegrationConnectionConfigDTO dto, IntegrationConnectionConfig entity) {

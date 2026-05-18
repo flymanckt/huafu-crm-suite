@@ -200,20 +200,113 @@
       <template #footer><el-button @click="sapDialog=false">取消</el-button><el-button type="primary" @click="submitSap">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="interfaceDialog" :title="interfaceForm.id ? '编辑接口' : '新增接口'" width="820px">
+    <el-dialog v-model="interfaceDialog" :title="interfaceForm.id ? '编辑接口' : '新增接口'" width="880px" class="interface-dialog">
       <el-form :model="interfaceForm" label-width="120px">
+        <el-alert
+          class="interface-alert"
+          :title="interfaceMode === 'SAP' ? 'SAP接口填写SAP连接、RFC/BAPI函数或IDoc/OData对象，字段映射维护入参和出参。' : '通用接口填写连接配置、HTTP方法和接口路径，调用地址由连接地址与接口路径组合。'"
+          type="info"
+          show-icon
+          :closable="false"
+        />
         <el-row :gutter="16">
+          <el-col :span="24">
+            <el-form-item label="接口类型">
+              <el-radio-group :model-value="interfaceMode" @change="handleInterfaceModeChange">
+                <el-radio-button label="SAP">SAP接口</el-radio-button>
+                <el-radio-button label="GENERIC">通用接口</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
           <el-col :span="12"><el-form-item label="接口编码"><el-input v-model="interfaceForm.interfaceCode" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="接口名称"><el-input v-model="interfaceForm.interfaceName" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="系统"><el-input v-model="interfaceForm.systemCode" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="协议"><el-select v-model="interfaceForm.protocol" style="width:100%"><el-option v-for="item in connectionTypes" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="8">
+            <el-form-item label="系统">
+              <el-select v-model="interfaceForm.systemCode" style="width:100%" filterable allow-create default-first-option>
+                <el-option label="SAP" value="SAP" />
+                <el-option label="CRM" value="CRM" />
+                <el-option label="外部系统" value="EXTERNAL" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="协议">
+              <el-select v-model="interfaceForm.protocol" style="width:100%" @change="handleProtocolChange">
+                <el-option v-for="item in availableProtocols" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="8"><el-form-item label="方向"><el-select v-model="interfaceForm.direction" style="width:100%"><el-option v-for="item in directions" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="连接编码"><el-input v-model="interfaceForm.connectionCode" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="业务模块"><el-input v-model="interfaceForm.businessModule" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="SAP函数/对象"><el-input v-model="interfaceForm.sapFunctionName" /></el-form-item></el-col>
-          <el-col :span="6"><el-form-item label="HTTP方法"><el-input v-model="interfaceForm.httpMethod" /></el-form-item></el-col>
-          <el-col :span="6"><el-form-item label="内容类型"><el-input v-model="interfaceForm.contentType" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="接口路径"><el-input v-model="interfaceForm.endpointPath" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item :label="connectionLabel">
+              <el-select
+                v-model="interfaceForm.connectionCode"
+                :placeholder="connectionPlaceholder"
+                style="width:100%"
+                filterable
+                allow-create
+                default-first-option
+              >
+                <el-option
+                  v-for="item in connectionSelectOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="业务模块"><el-input v-model="interfaceForm.businessModule" placeholder="如 CUSTOMER、ORDER、PRODUCT" /></el-form-item></el-col>
+
+          <template v-if="interfaceMode === 'SAP'">
+            <el-col :span="12">
+              <el-form-item :label="sapObjectLabel">
+                <el-input v-model="interfaceForm.sapFunctionName" :placeholder="sapObjectPlaceholder" />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="interfaceForm.protocol !== 'SAP_RFC'" :span="12">
+              <el-form-item :label="interfaceForm.protocol === 'SAP_ODATA' ? 'OData路径' : '扩展对象路径'">
+                <el-input v-model="interfaceForm.endpointPath" :placeholder="interfaceForm.protocol === 'SAP_ODATA' ? '/sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner' : '可选，填写扩展对象或接收端路径'" />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="interfaceForm.protocol === 'SAP_ODATA'" :span="6">
+              <el-form-item label="HTTP方法">
+                <el-select v-model="interfaceForm.httpMethod" style="width:100%">
+                  <el-option v-for="item in httpMethods" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col v-if="interfaceForm.protocol === 'SAP_ODATA'" :span="6">
+              <el-form-item label="内容类型">
+                <el-select v-model="interfaceForm.contentType" style="width:100%" filterable allow-create default-first-option>
+                  <el-option v-for="item in contentTypes" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </template>
+
+          <template v-else>
+            <el-col :span="6">
+              <el-form-item label="HTTP方法">
+                <el-select v-model="interfaceForm.httpMethod" style="width:100%">
+                  <el-option v-for="item in httpMethods" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="内容类型">
+                <el-select v-model="interfaceForm.contentType" style="width:100%" filterable allow-create default-first-option>
+                  <el-option v-for="item in contentTypes" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="24">
+              <el-form-item label="接口路径">
+                <el-input v-model="interfaceForm.endpointPath" placeholder="/api/v1/customer/sync" />
+              </el-form-item>
+            </el-col>
+          </template>
+
           <el-col :span="12"><el-form-item label="重试次数"><el-input-number v-model="interfaceForm.retryLimit" :min="0" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="启用"><el-switch v-model="interfaceForm.enabled" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="说明"><el-input v-model="interfaceForm.description" type="textarea" :rows="2" /></el-form-item></el-col>
@@ -225,8 +318,8 @@
     <el-dialog v-model="mappingDialog" :title="mappingForm.id ? '编辑字段映射' : '新增字段映射'" width="700px">
       <el-form :model="mappingForm" label-width="110px">
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="来源字段"><el-input v-model="mappingForm.sourceField" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="目标字段"><el-input v-model="mappingForm.targetField" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="来源字段"><el-input v-model="mappingForm.sourceField" placeholder="CRM字段或入参字段" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="目标字段"><el-input v-model="mappingForm.targetField" placeholder="外部接口字段或SAP参数名" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="字段类型"><el-input v-model="mappingForm.fieldType" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="序号"><el-input-number v-model="mappingForm.sortOrder" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="必填"><el-switch v-model="mappingForm.required" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
@@ -241,7 +334,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   authTypes,
@@ -294,6 +387,62 @@ const connectionForm = ref(defaultConnection())
 const sapForm = ref(defaultSap())
 const interfaceForm = ref(defaultInterface())
 const mappingForm = ref(defaultMapping())
+
+const sapProtocolOptions = [
+  { label: 'SAP RFC / BAPI', value: 'SAP_RFC' },
+  { label: 'SAP OData', value: 'SAP_ODATA' },
+  { label: 'SAP IDoc', value: 'SAP_IDOC' }
+]
+const genericProtocolOptions = [
+  { label: 'REST', value: 'REST' },
+  { label: 'SOAP', value: 'SOAP' },
+  { label: 'Webhook', value: 'WEBHOOK' },
+  { label: 'SFTP', value: 'SFTP' },
+  { label: 'FTP', value: 'FTP' },
+  { label: 'Database', value: 'DATABASE' },
+  { label: 'Kafka', value: 'KAFKA' },
+  { label: 'RabbitMQ', value: 'RABBITMQ' },
+  { label: '自定义', value: 'CUSTOM' }
+]
+const sapProtocols = sapProtocolOptions.map(item => item.value)
+const httpMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+const contentTypes = ['application/json', 'application/xml', 'text/xml', 'application/x-www-form-urlencoded', 'multipart/form-data', 'text/plain']
+
+const interfaceMode = computed(() => sapProtocols.includes(interfaceForm.value.protocol) ? 'SAP' : 'GENERIC')
+const availableProtocols = computed(() => interfaceMode.value === 'SAP' ? sapProtocolOptions : genericProtocolOptions)
+const isSapRfcInterface = computed(() => interfaceForm.value.protocol === 'SAP_RFC')
+const connectionLabel = computed(() => {
+  if (isSapRfcInterface.value) return 'SAP RFC配置'
+  return interfaceMode.value === 'SAP' ? 'SAP连接配置' : '连接配置'
+})
+const connectionPlaceholder = computed(() => {
+  if (isSapRfcInterface.value) return '选择SAP RFC连接配置'
+  return interfaceMode.value === 'SAP' ? '选择SAP连接配置' : '选择通用连接配置'
+})
+const sapObjectLabel = computed(() => {
+  if (interfaceForm.value.protocol === 'SAP_IDOC') return 'IDoc/消息类型'
+  if (interfaceForm.value.protocol === 'SAP_ODATA') return 'OData对象'
+  return 'RFC/BAPI函数'
+})
+const sapObjectPlaceholder = computed(() => {
+  if (interfaceForm.value.protocol === 'SAP_IDOC') return '如 DEBMAS / ORDERS'
+  if (interfaceForm.value.protocol === 'SAP_ODATA') return '如 API_BUSINESS_PARTNER'
+  return '如 ZCRM_CUSTOMER_SYNC / BAPI_CUSTOMER_CREATEFROMDATA1'
+})
+const connectionSelectOptions = computed(() => {
+  if (isSapRfcInterface.value) {
+    return sapConfigs.value.map(item => ({
+      label: `${item.configCode} - ${item.configName}`,
+      value: item.configCode
+    }))
+  }
+  const matched = connections.value.filter(item => !interfaceForm.value.protocol || item.connectionType === interfaceForm.value.protocol)
+  const source = matched.length ? matched : connections.value
+  return source.map(item => ({
+    label: `${item.connectionCode} - ${item.connectionName} (${item.connectionType})`,
+    value: item.connectionCode
+  }))
+})
 
 async function loadConnections() {
   loading.value = true
@@ -388,15 +537,100 @@ async function handleTestSap(row) {
 
 function openInterface(row) {
   interfaceForm.value = row ? { ...row } : defaultInterface()
+  applyProtocolDefaults(false)
+  if (connections.value.length === 0) loadConnections()
+  if (sapConfigs.value.length === 0) loadSap()
   interfaceDialog.value = true
 }
 
 async function submitInterface() {
-  if (interfaceForm.value.id) await updateInterface(interfaceForm.value.id, interfaceForm.value)
-  else await createInterface(interfaceForm.value)
+  const payload = buildInterfacePayload()
+  if (!validateInterfacePayload(payload)) return
+  if (payload.id) await updateInterface(payload.id, payload)
+  else await createInterface(payload)
   ElMessage.success('接口定义已保存')
   interfaceDialog.value = false
   loadInterfaces()
+}
+
+function handleInterfaceModeChange(mode) {
+  interfaceForm.value.protocol = mode === 'SAP' ? 'SAP_RFC' : 'REST'
+  interfaceForm.value.connectionCode = ''
+  applyProtocolDefaults(true)
+}
+
+function handleProtocolChange() {
+  interfaceForm.value.connectionCode = ''
+  applyProtocolDefaults(true)
+}
+
+function applyProtocolDefaults(resetProtocolFields) {
+  if (interfaceMode.value === 'SAP') {
+    interfaceForm.value.systemCode = interfaceForm.value.systemCode || 'SAP'
+    if (interfaceForm.value.systemCode === 'EXTERNAL') interfaceForm.value.systemCode = 'SAP'
+    if (interfaceForm.value.protocol === 'SAP_RFC') {
+      if (resetProtocolFields) {
+        interfaceForm.value.endpointPath = ''
+        interfaceForm.value.contentType = ''
+      }
+      interfaceForm.value.httpMethod = ''
+    } else {
+      interfaceForm.value.httpMethod = interfaceForm.value.httpMethod || 'POST'
+      interfaceForm.value.contentType = interfaceForm.value.contentType || 'application/json'
+    }
+    return
+  }
+  if (!interfaceForm.value.systemCode || interfaceForm.value.systemCode === 'SAP') {
+    interfaceForm.value.systemCode = 'EXTERNAL'
+  }
+  interfaceForm.value.httpMethod = interfaceForm.value.httpMethod || 'POST'
+  interfaceForm.value.contentType = interfaceForm.value.contentType || 'application/json'
+  if (resetProtocolFields) interfaceForm.value.sapFunctionName = ''
+}
+
+function buildInterfacePayload() {
+  const payload = { ...interfaceForm.value }
+  if (sapProtocols.includes(payload.protocol)) {
+    payload.systemCode = payload.systemCode || 'SAP'
+    if (payload.protocol === 'SAP_RFC') {
+      payload.httpMethod = ''
+      payload.endpointPath = ''
+      payload.contentType = ''
+    }
+  } else {
+    payload.systemCode = payload.systemCode || 'EXTERNAL'
+    payload.sapFunctionName = ''
+    payload.httpMethod = payload.httpMethod || 'POST'
+    payload.contentType = payload.contentType || 'application/json'
+  }
+  return payload
+}
+
+function validateInterfacePayload(payload) {
+  if (!payload.interfaceCode || !payload.interfaceName) {
+    ElMessage.warning('请填写接口编码和接口名称')
+    return false
+  }
+  if (!payload.connectionCode) {
+    ElMessage.warning(interfaceMode.value === 'SAP' ? '请选择SAP连接配置' : '请选择通用连接配置')
+    return false
+  }
+  if (sapProtocols.includes(payload.protocol)) {
+    if (payload.protocol !== 'SAP_ODATA' && !payload.sapFunctionName) {
+      ElMessage.warning('请填写SAP函数、BAPI或IDoc消息类型')
+      return false
+    }
+    if (payload.protocol === 'SAP_ODATA' && (!payload.sapFunctionName || !payload.endpointPath)) {
+      ElMessage.warning('请填写OData对象和OData路径')
+      return false
+    }
+    return true
+  }
+  if (!payload.httpMethod || !payload.endpointPath) {
+    ElMessage.warning('请填写HTTP方法和接口路径')
+    return false
+  }
+  return true
 }
 
 async function handleDeleteInterface(id) {
@@ -458,5 +692,6 @@ onMounted(() => {
 .card-header { justify-content: space-between; }
 .toolbar { margin-bottom: 12px; }
 .pager { margin-top: 12px; justify-content: flex-end; }
+.interface-alert { margin-bottom: 14px; }
+.interface-dialog :deep(.el-radio-button__inner) { min-width: 92px; }
 </style>
-
