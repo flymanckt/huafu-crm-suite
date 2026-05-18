@@ -33,6 +33,8 @@ import org.springframework.util.StringUtils;
 public class IntegrationPlatformServiceImpl implements IntegrationPlatformService {
     private static final Set<String> SAP_PROTOCOLS = Set.of("SAP_RFC", "SAP_ODATA", "SAP_IDOC");
     private static final Set<String> GENERIC_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SFTP", "FTP", "DATABASE", "KAFKA", "RABBITMQ", "CUSTOM");
+    private static final Set<String> PARAMETER_MODES = Set.of("SINGLE", "TABLE");
+    private static final Set<String> MAPPING_DIRECTIONS = Set.of("OUTBOUND", "INBOUND", "BIDIRECTIONAL");
 
     private final IntegrationConnectionConfigMapper connectionMapper;
     private final SapRfcConfigMapper sapRfcConfigMapper;
@@ -262,6 +264,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Transactional
     public IntegrationFieldMapping saveMapping(IntegrationFieldMappingDTO dto) {
         requireInterface(dto.interfaceId());
+        validateMappingConfig(dto);
         IntegrationFieldMapping entity = toMapping(dto, new IntegrationFieldMapping());
         entity.setCreatedTime(LocalDateTime.now());
         entity.setUpdatedTime(LocalDateTime.now());
@@ -274,6 +277,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Transactional
     public IntegrationFieldMapping updateMapping(Long id, IntegrationFieldMappingDTO dto) {
         requireInterface(dto.interfaceId());
+        validateMappingConfig(dto);
         IntegrationFieldMapping entity = requireMapping(id);
         toMapping(dto, entity);
         entity.setId(id);
@@ -431,8 +435,14 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
 
     private IntegrationFieldMapping toMapping(IntegrationFieldMappingDTO dto, IntegrationFieldMapping entity) {
         entity.setInterfaceId(dto.interfaceId());
+        entity.setParameterMode(StringUtils.hasText(dto.parameterMode()) ? InputSanitizer.safeText(dto.parameterMode()) : "SINGLE");
+        entity.setParameterGroup(InputSanitizer.safeText(dto.parameterGroup()));
+        entity.setMappingDirection(StringUtils.hasText(dto.mappingDirection()) ? InputSanitizer.safeText(dto.mappingDirection()) : "OUTBOUND");
+        entity.setSourceModule(StringUtils.hasText(dto.sourceModule()) ? InputSanitizer.safeText(dto.sourceModule()) : "customer");
         entity.setSourceField(InputSanitizer.safeText(dto.sourceField()));
+        entity.setSourceFieldLabel(InputSanitizer.safeText(dto.sourceFieldLabel()));
         entity.setTargetField(InputSanitizer.safeText(dto.targetField()));
+        entity.setTargetFieldLabel(InputSanitizer.safeText(dto.targetFieldLabel()));
         entity.setFieldType(StringUtils.hasText(dto.fieldType()) ? InputSanitizer.safeText(dto.fieldType()) : "STRING");
         entity.setRequired(dto.required() == null ? (short) 0 : dto.required());
         entity.setDefaultValue(InputSanitizer.safeText(dto.defaultValue()));
@@ -440,6 +450,26 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         entity.setSortOrder(dto.sortOrder() == null ? 0 : dto.sortOrder());
         entity.setRemark(InputSanitizer.safeText(dto.remark()));
         return entity;
+    }
+
+    private void validateMappingConfig(IntegrationFieldMappingDTO dto) {
+        String mode = StringUtils.hasText(dto.parameterMode()) ? dto.parameterMode().trim() : "SINGLE";
+        String direction = StringUtils.hasText(dto.mappingDirection()) ? dto.mappingDirection().trim() : "OUTBOUND";
+        if (!PARAMETER_MODES.contains(mode)) {
+            throw new BizException(1001, "不支持的传参模式：" + dto.parameterMode());
+        }
+        if (!MAPPING_DIRECTIONS.contains(direction)) {
+            throw new BizException(1001, "不支持的映射方向：" + dto.mappingDirection());
+        }
+        if ("TABLE".equals(mode) && !StringUtils.hasText(dto.parameterGroup())) {
+            throw new BizException(1001, "表参数需要填写参数组或表名");
+        }
+        if (!StringUtils.hasText(dto.sourceModule())) {
+            throw new BizException(1001, "请选择CRM模块");
+        }
+        if (!StringUtils.hasText(dto.sourceField()) || !StringUtils.hasText(dto.targetField())) {
+            throw new BizException(1001, "请配置CRM字段和接口字段");
+        }
     }
 
     private SapRfcConfig requireSapConfig(Long id) {

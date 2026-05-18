@@ -105,8 +105,20 @@
           </div>
           <el-table :data="mappings" v-loading="loading" border stripe max-height="calc(100vh - 330px)">
             <el-table-column prop="sortOrder" label="序号" width="80" />
-            <el-table-column prop="sourceField" label="来源字段" min-width="180" />
-            <el-table-column prop="targetField" label="目标字段" min-width="180" />
+            <el-table-column prop="parameterMode" label="传参模式" width="100">
+              <template #default="{ row }"><el-tag>{{ parameterModeLabel(row.parameterMode) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column prop="parameterGroup" label="参数组/表名" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="mappingDirection" label="方向" width="110" />
+            <el-table-column prop="sourceModule" label="CRM模块" min-width="150">
+              <template #default="{ row }">{{ moduleLabel(row.sourceModule) }}</template>
+            </el-table-column>
+            <el-table-column label="CRM字段" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.sourceFieldLabel || row.sourceField }}</template>
+            </el-table-column>
+            <el-table-column label="接口字段" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.targetFieldLabel || row.targetField }}</template>
+            </el-table-column>
             <el-table-column prop="fieldType" label="类型" width="110" />
             <el-table-column label="必填" width="80">
               <template #default="{ row }">{{ row.required ? '是' : '否' }}</template>
@@ -315,16 +327,91 @@
       <template #footer><el-button @click="interfaceDialog=false">取消</el-button><el-button type="primary" @click="submitInterface">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="mappingDialog" :title="mappingForm.id ? '编辑字段映射' : '新增字段映射'" width="700px">
-      <el-form :model="mappingForm" label-width="110px">
+    <el-dialog v-model="mappingDialog" :title="mappingForm.id ? '编辑字段映射' : '新增字段映射'" width="900px">
+      <el-form :model="mappingForm" label-width="120px">
+        <el-alert
+          class="interface-alert"
+          title="单值参数用于普通字段，表参数用于 SAP TABLES 或 JSON数组行字段。CRM字段从模块字段清单中选择，接口字段填写对方接口的字段名。"
+          type="info"
+          show-icon
+          :closable="false"
+        />
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="来源字段"><el-input v-model="mappingForm.sourceField" placeholder="CRM字段或入参字段" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="目标字段"><el-input v-model="mappingForm.targetField" placeholder="外部接口字段或SAP参数名" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="字段类型"><el-input v-model="mappingForm.fieldType" /></el-form-item></el-col>
+          <el-col :span="8">
+            <el-form-item label="传参模式">
+              <el-radio-group v-model="mappingForm.parameterMode">
+                <el-radio-button label="SINGLE">单值参数</el-radio-button>
+                <el-radio-button label="TABLE">表参数</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="参数方向">
+              <el-select v-model="mappingForm.mappingDirection" style="width:100%">
+                <el-option label="出站：CRM -> 外部" value="OUTBOUND" />
+                <el-option label="入站：外部 -> CRM" value="INBOUND" />
+                <el-option label="双向" value="BIDIRECTIONAL" />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="8"><el-form-item label="序号"><el-input-number v-model="mappingForm.sortOrder" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="参数组/表名">
+              <el-input v-model="mappingForm.parameterGroup" :placeholder="mappingForm.parameterMode === 'TABLE' ? '如 ET_CUSTOMER / items' : '如 IMPORT / body / query'" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="CRM模块">
+              <el-select v-model="mappingForm.sourceModule" style="width:100%" filterable @change="handleMappingModuleChange">
+                <el-option v-for="item in crmModuleOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="CRM字段">
+              <el-select
+                v-model="mappingForm.sourceField"
+                style="width:100%"
+                filterable
+                allow-create
+                default-first-option
+                placeholder="选择CRM模块字段"
+                @change="handleMappingSourceFieldChange"
+              >
+                <el-option
+                  v-for="item in currentCrmFieldOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="字段显示名">
+              <el-input v-model="mappingForm.sourceFieldLabel" placeholder="自动带出，可手工调整" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="接口字段">
+              <el-input v-model="mappingForm.targetField" placeholder="SAP参数名、表字段名、JSON Path 或外部接口字段" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="接口字段名">
+              <el-input v-model="mappingForm.targetFieldLabel" placeholder="展示名，可选" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="字段类型">
+              <el-select v-model="mappingForm.fieldType" style="width:100%" filterable allow-create default-first-option>
+                <el-option v-for="item in fieldTypes" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="8"><el-form-item label="必填"><el-switch v-model="mappingForm.required" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="默认值"><el-input v-model="mappingForm.defaultValue" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="转换规则"><el-input v-model="mappingForm.transformRule" type="textarea" :rows="3" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="转换规则"><el-input v-model="mappingForm.transformRule" type="textarea" :rows="3" placeholder="可写枚举映射、格式化规则、简单表达式说明，如 date:yyyyMMdd 或 map:{A:01,B:02}" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="备注"><el-input v-model="mappingForm.remark" /></el-form-item></el-col>
         </el-row>
       </el-form>
@@ -336,6 +423,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { businessModules } from '@/config/businessModules'
 import {
   authTypes,
   connectionTypes,
@@ -382,11 +470,107 @@ const mappingDialog = ref(false)
 const defaultConnection = () => ({ connectionCode: '', connectionName: '', connectionType: 'REST', enabled: 1, baseUrl: '', authType: 'NONE', authConfig: '', headerConfig: '', timeoutMs: 30000, remark: '' })
 const defaultSap = () => ({ configCode: 'SAP_PRD', configName: 'SAP生产环境', enabled: 1, appServerHost: '', systemNumber: '00', client: '800', userName: '', passwordCipher: '', language: 'ZH', poolCapacity: 5, peakLimit: 10, connectionTimeout: 30000, remark: '' })
 const defaultInterface = () => ({ interfaceCode: '', interfaceName: '', systemCode: 'SAP', connectionCode: '', protocol: 'SAP_RFC', direction: 'OUTBOUND', businessModule: '', sapFunctionName: '', httpMethod: 'POST', endpointPath: '', contentType: 'application/json', enabled: 1, retryLimit: 3, description: '' })
-const defaultMapping = () => ({ interfaceId: null, sourceField: '', targetField: '', fieldType: 'STRING', required: 0, defaultValue: '', transformRule: '', sortOrder: 0, remark: '' })
+const defaultMapping = () => ({
+  interfaceId: null,
+  parameterMode: 'SINGLE',
+  parameterGroup: '',
+  mappingDirection: 'OUTBOUND',
+  sourceModule: 'customer',
+  sourceField: '',
+  sourceFieldLabel: '',
+  targetField: '',
+  targetFieldLabel: '',
+  fieldType: 'STRING',
+  required: 0,
+  defaultValue: '',
+  transformRule: '',
+  sortOrder: 0,
+  remark: ''
+})
 const connectionForm = ref(defaultConnection())
 const sapForm = ref(defaultSap())
 const interfaceForm = ref(defaultInterface())
 const mappingForm = ref(defaultMapping())
+
+const customerFields = [
+  { key: 'customerCode', label: '客户编码' },
+  { key: 'customerName', label: '客户名称', required: true },
+  { key: 'customerShortName', label: '客户简称' },
+  { key: 'type', label: '客户类型' },
+  { key: 'status', label: '客户状态' },
+  { key: 'level', label: '客户等级' },
+  { key: 'businessType', label: '业务类型' },
+  { key: 'customerStage', label: '客户阶段' },
+  { key: 'customerCategory', label: '客户分类' },
+  { key: 'customerSource', label: '客户来源' },
+  { key: 'mainCustomerGroup', label: '客户组' },
+  { key: 'countryRegion', label: '国家/区域' },
+  { key: 'province', label: '省份' },
+  { key: 'city', label: '城市' },
+  { key: 'district', label: '区县' },
+  { key: 'address', label: '详细地址' },
+  { key: 'locationLng', label: '经度', type: 'number' },
+  { key: 'locationLat', label: '纬度', type: 'number' },
+  { key: 'mainContactName', label: '主联系人' },
+  { key: 'mainContactPhone', label: '主联系人电话' },
+  { key: 'mainContactRole', label: '主联系人角色' },
+  { key: 'mainBrand', label: '主要品牌' },
+  { key: 'annualYarnVolume', label: '年用纱量', type: 'number' },
+  { key: 'annualRevenue', label: '年销售额', type: 'number' },
+  { key: 'productionCapacity', label: '产能信息' },
+  { key: 'industryPosition', label: '行业地位' },
+  { key: 'salesMerchandiser', label: '销售跟单' },
+  { key: 'unifiedSocialCreditCode', label: '统一社会信用代码' },
+  { key: 'englishName', label: '英文名称' },
+  { key: 'assetType', label: '资产类型' },
+  { key: 'taxId', label: '税号' },
+  { key: 'bankName', label: '开户行' },
+  { key: 'bankAccount', label: '银行账号' },
+  { key: 'invoiceTitle', label: '发票抬头' },
+  { key: 'sapCustomerCode', label: 'SAP客户编码' },
+  { key: 'companyCode', label: '公司代码' },
+  { key: 'salesGroup', label: '销售组' },
+  { key: 'priceList', label: '价格清单' },
+  { key: 'currency', label: '币种' },
+  { key: 'deliveryFactory', label: '交货工厂' },
+  { key: 'taxClassification', label: '税分类' },
+  { key: 'shipToParty', label: '送达方' },
+  { key: 'soldToParty', label: '售达方' },
+  { key: 'payerParty', label: '付款方' },
+  { key: 'remark', label: '备注' }
+]
+
+const baseRecordFields = [
+  { key: 'recordNo', label: '记录编号' },
+  { key: 'title', label: '记录标题' },
+  { key: 'status', label: '状态' },
+  { key: 'ownerName', label: '负责人' },
+  { key: 'recordDate', label: '日期', type: 'date' },
+  { key: 'remark', label: '备注' }
+]
+
+const crmModuleFieldMap = {
+  customer: customerFields,
+  ...Object.fromEntries(Object.entries(businessModules).map(([key, config]) => [
+    key,
+    [
+      ...baseRecordFields,
+      ...(config.fields || []).map(field => ({
+        key: `payload.${field.key}`,
+        label: field.label,
+        type: field.type,
+        required: field.required
+      }))
+    ]
+  ]))
+}
+
+const crmModuleOptions = [
+  { label: '客户主数据', value: 'customer' },
+  ...Object.entries(businessModules).map(([value, config]) => ({ label: config.title, value }))
+]
+const fieldTypes = ['STRING', 'NUMBER', 'DATE', 'DATETIME', 'BOOLEAN', 'DECIMAL', 'JSON', 'ARRAY']
+const parameterModes = { SINGLE: '单值', TABLE: '表参数' }
 
 const sapProtocolOptions = [
   { label: 'SAP RFC / BAPI', value: 'SAP_RFC' },
@@ -441,6 +625,14 @@ const connectionSelectOptions = computed(() => {
   return source.map(item => ({
     label: `${item.connectionCode} - ${item.connectionName} (${item.connectionType})`,
     value: item.connectionCode
+  }))
+})
+const currentCrmFieldOptions = computed(() => {
+  const fields = crmModuleFieldMap[mappingForm.value.sourceModule] || []
+  return fields.map(item => ({
+    label: `${item.label} (${item.key})`,
+    value: item.key,
+    raw: item
   }))
 })
 
@@ -646,7 +838,10 @@ function selectInterface(row) {
 }
 
 function openMapping(row) {
-  mappingForm.value = row ? { ...row } : { ...defaultMapping(), interfaceId: selectedInterfaceId.value }
+  mappingForm.value = row
+    ? { ...defaultMapping(), ...row }
+    : { ...defaultMapping(), interfaceId: selectedInterfaceId.value }
+  normalizeMappingLabels()
   mappingDialog.value = true
 }
 
@@ -655,11 +850,79 @@ async function submitMapping() {
     ElMessage.warning('请先选择接口')
     return
   }
-  if (mappingForm.value.id) await updateMapping(mappingForm.value.id, mappingForm.value)
-  else await createMapping(mappingForm.value)
+  const payload = buildMappingPayload()
+  if (!validateMappingPayload(payload)) return
+  if (payload.id) await updateMapping(payload.id, payload)
+  else await createMapping(payload)
   ElMessage.success('字段映射已保存')
   mappingDialog.value = false
   loadMappings()
+}
+
+function handleMappingModuleChange() {
+  mappingForm.value.sourceField = ''
+  mappingForm.value.sourceFieldLabel = ''
+}
+
+function handleMappingSourceFieldChange() {
+  normalizeMappingLabels()
+  const field = findCurrentCrmField(mappingForm.value.sourceField)
+  if (field?.type === 'number') mappingForm.value.fieldType = 'NUMBER'
+  else if (field?.type === 'date') mappingForm.value.fieldType = 'DATE'
+  else if (!mappingForm.value.fieldType) mappingForm.value.fieldType = 'STRING'
+}
+
+function normalizeMappingLabels() {
+  const field = findCurrentCrmField(mappingForm.value.sourceField)
+  if (field && !mappingForm.value.sourceFieldLabel) {
+    mappingForm.value.sourceFieldLabel = field.label
+  }
+  if (!mappingForm.value.targetFieldLabel && mappingForm.value.targetField) {
+    mappingForm.value.targetFieldLabel = mappingForm.value.targetField
+  }
+}
+
+function findCurrentCrmField(fieldKey) {
+  return (crmModuleFieldMap[mappingForm.value.sourceModule] || []).find(item => item.key === fieldKey)
+}
+
+function buildMappingPayload() {
+  normalizeMappingLabels()
+  return {
+    ...mappingForm.value,
+    parameterMode: mappingForm.value.parameterMode || 'SINGLE',
+    mappingDirection: mappingForm.value.mappingDirection || 'OUTBOUND',
+    sourceModule: mappingForm.value.sourceModule || 'customer',
+    fieldType: mappingForm.value.fieldType || 'STRING'
+  }
+}
+
+function validateMappingPayload(payload) {
+  if (!payload.sourceModule) {
+    ElMessage.warning('请选择CRM模块')
+    return false
+  }
+  if (!payload.sourceField) {
+    ElMessage.warning('请选择CRM字段')
+    return false
+  }
+  if (!payload.targetField) {
+    ElMessage.warning('请填写接口字段')
+    return false
+  }
+  if (payload.parameterMode === 'TABLE' && !payload.parameterGroup) {
+    ElMessage.warning('表参数需要填写参数组或表名')
+    return false
+  }
+  return true
+}
+
+function parameterModeLabel(value) {
+  return parameterModes[value] || value || '单值'
+}
+
+function moduleLabel(value) {
+  return crmModuleOptions.find(item => item.value === value)?.label || value || '-'
 }
 
 async function handleDeleteMapping(id) {

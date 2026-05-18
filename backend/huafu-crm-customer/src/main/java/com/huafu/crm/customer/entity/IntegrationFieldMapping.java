@@ -10,8 +10,14 @@ public class IntegrationFieldMapping {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long interfaceId;
+    private String parameterMode;
+    private String parameterGroup;
+    private String mappingDirection;
+    private String sourceModule;
     private String sourceField;
+    private String sourceFieldLabel;
     private String targetField;
+    private String targetFieldLabel;
     private String fieldType;
     private Short required;
     private String defaultValue;
@@ -26,10 +32,22 @@ public class IntegrationFieldMapping {
     public void setId(Long id) { this.id = id; }
     public Long getInterfaceId() { return interfaceId; }
     public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
+    public String getParameterMode() { return parameterMode; }
+    public void setParameterMode(String parameterMode) { this.parameterMode = parameterMode; }
+    public String getParameterGroup() { return parameterGroup; }
+    public void setParameterGroup(String parameterGroup) { this.parameterGroup = parameterGroup; }
+    public String getMappingDirection() { return mappingDirection; }
+    public void setMappingDirection(String mappingDirection) { this.mappingDirection = mappingDirection; }
+    public String getSourceModule() { return sourceModule; }
+    public void setSourceModule(String sourceModule) { this.sourceModule = sourceModule; }
     public String getSourceField() { return sourceField; }
     public void setSourceField(String sourceField) { this.sourceField = sourceField; }
+    public String getSourceFieldLabel() { return sourceFieldLabel; }
+    public void setSourceFieldLabel(String sourceFieldLabel) { this.sourceFieldLabel = sourceFieldLabel; }
     public String getTargetField() { return targetField; }
     public void setTargetField(String targetField) { this.targetField = targetField; }
+    public String getTargetFieldLabel() { return targetFieldLabel; }
+    public void setTargetFieldLabel(String targetFieldLabel) { this.targetFieldLabel = targetFieldLabel; }
     public String getFieldType() { return fieldType; }
     public void setFieldType(String fieldType) { this.fieldType = fieldType; }
     public Short getRequired() { return required; }
@@ -49,4 +67,3 @@ public class IntegrationFieldMapping {
     public Short getDeleted() { return deleted; }
     public void setDeleted(Short deleted) { this.deleted = deleted; }
 }
-
