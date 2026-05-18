@@ -128,6 +128,12 @@ const routes = [
         component: () => import('../views/system/SystemConfig.vue'),
         meta: { title: '系统配置' }
       },
+      {
+        path: 'system/integration',
+        name: 'IntegrationPlatform',
+        component: () => import('../views/system/IntegrationPlatform.vue'),
+        meta: { title: '集成平台' }
+      },
       // 勤力度
       {
         path: 'performance/visit',

@@ -55,6 +55,7 @@
           <el-menu-item index="/admin/dept">部门管理</el-menu-item>
           <el-menu-item index="/system/dict">字典管理</el-menu-item>
           <el-menu-item index="/system/config">外围系统配置</el-menu-item>
+          <el-menu-item index="/system/integration">集成平台</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="performance">
           <template #title><el-icon><Calendar /></el-icon>勤力度</template>

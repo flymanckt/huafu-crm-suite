@@ -241,7 +241,7 @@ const rules = {
   type: [{ required: true, message: '请选择类型', trigger: 'change' }]
 }
 
-const groupLabel = (g) => ({ AMAP: '高德地图', AI: 'AI服务', API: '接口配置', SYSTEM: '系统配置' }[g] || g)
+const groupLabel = (g) => ({ AMAP: '高德地图', AI: 'AI服务', API: '接口配置', SAP: 'SAP配置', INTEGRATION: '集成平台', SYSTEM: '系统配置' }[g] || g)
 
 const currentAiProvider = computed(() => aiProviders.find(item => item.value === aiForm.value.provider) || aiProviders[0])
 
