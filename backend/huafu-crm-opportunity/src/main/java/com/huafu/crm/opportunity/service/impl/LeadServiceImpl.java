@@ -21,22 +21,7 @@ public class LeadServiceImpl implements LeadService {
     @Override @Transactional
     public LeadVO create(LeadCreateDTO dto) {
         Lead e = new Lead();
-        e.setLeadType(dto.leadType());
-        e.setCustomerId(dto.customerId());
-        e.setCustomerName(dto.customerName());
-        e.setContactName(dto.contactName());
-        e.setContactPhone(dto.contactPhone());
-        e.setProvince(dto.province());
-        e.setCity(dto.city());
-        e.setProductName(dto.productName());
-        e.setCompetitorName(dto.competitorName());
-        e.setCompetitorPrice(dto.competitorPrice());
-        e.setCompetitorDiscount(dto.competitorDiscount());
-        e.setMarginRate(dto.marginRate());
-        e.setSource(dto.source());
-        e.setCreatorUserId(dto.creatorUserId());
-        e.setHandlerUserId(dto.handlerUserId());
-        e.setRemark(dto.remark());
+        apply(e, dto);
         e.setStatus(1);
         mapper.insert(e);
         return toVO(e);
@@ -47,6 +32,22 @@ public class LeadServiceImpl implements LeadService {
         Lead e = mapper.selectById(id);
         if (e == null) throw new BizException(2001, "线索不存在");
         return toVO(e);
+    }
+
+    @Override @Transactional
+    public LeadVO update(Long id, LeadCreateDTO dto) {
+        Lead e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "线索不存在");
+        apply(e, dto);
+        mapper.updateById(e);
+        return toVO(e);
+    }
+
+    @Override @Transactional
+    public boolean delete(Long id) {
+        Lead e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "线索不存在");
+        return mapper.deleteById(id) > 0;
     }
 
     @Override @Transactional(readOnly = true)
@@ -69,5 +70,24 @@ public class LeadServiceImpl implements LeadService {
             e.getSource(), e.getCreatorUserId(), e.getHandlerUserId(), e.getStatus(),
             e.getConvertTime(), e.getConvertedOppId(), e.getRemark(),
             e.getCreatedBy(), e.getCreatedTime(), e.getVersion());
+    }
+
+    private void apply(Lead e, LeadCreateDTO dto) {
+        e.setLeadType(dto.leadType());
+        e.setCustomerId(dto.customerId());
+        e.setCustomerName(dto.customerName());
+        e.setContactName(dto.contactName());
+        e.setContactPhone(dto.contactPhone());
+        e.setProvince(dto.province());
+        e.setCity(dto.city());
+        e.setProductName(dto.productName());
+        e.setCompetitorName(dto.competitorName());
+        e.setCompetitorPrice(dto.competitorPrice());
+        e.setCompetitorDiscount(dto.competitorDiscount());
+        e.setMarginRate(dto.marginRate());
+        e.setSource(dto.source());
+        e.setCreatorUserId(dto.creatorUserId());
+        e.setHandlerUserId(dto.handlerUserId());
+        e.setRemark(dto.remark());
     }
 }

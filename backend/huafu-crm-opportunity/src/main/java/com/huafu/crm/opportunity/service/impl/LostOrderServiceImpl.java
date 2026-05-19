@@ -1,6 +1,7 @@
 package com.huafu.crm.opportunity.service.impl;
 
 import com.huafu.crm.common.api.PageResult;
+import com.huafu.crm.common.exception.BizException;
 import com.huafu.crm.opportunity.dto.LostOrderCreateDTO;
 import com.huafu.crm.opportunity.entity.LostOrder;
 import com.huafu.crm.opportunity.mapper.LostOrderMapper;
@@ -20,21 +21,32 @@ public class LostOrderServiceImpl implements LostOrderService {
     @Override @Transactional
     public LostOrderVO create(LostOrderCreateDTO dto) {
         LostOrder e = new LostOrder();
-        e.setOpportunityId(dto.opportunityId());
-        e.setCustomerId(dto.customerId());
-        e.setLostType(dto.lostType());
-        e.setCompetitorName(dto.competitorName());
-        e.setCompetitorPrice(dto.competitorPrice());
-        e.setOurPrice(dto.ourPrice());
-        e.setMarginDiff(dto.marginDiff());
-        e.setCompetitorDiscount(dto.competitorDiscount());
-        e.setOurDiscount(dto.ourDiscount());
-        e.setReasonDetail(dto.reasonDetail());
-        e.setRecoveryPossible(dto.recoveryPossible());
-        e.setFollowUpDate(dto.followUpDate());
-        e.setHandlerUserId(dto.handlerUserId());
+        apply(e, dto);
         mapper.insert(e);
         return toVO(e);
+    }
+
+    @Override @Transactional(readOnly = true)
+    public LostOrderVO getById(Long id) {
+        LostOrder e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "丢单记录不存在");
+        return toVO(e);
+    }
+
+    @Override @Transactional
+    public LostOrderVO update(Long id, LostOrderCreateDTO dto) {
+        LostOrder e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "丢单记录不存在");
+        apply(e, dto);
+        mapper.updateById(e);
+        return toVO(e);
+    }
+
+    @Override @Transactional
+    public boolean delete(Long id) {
+        LostOrder e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "丢单记录不存在");
+        return mapper.deleteById(id) > 0;
     }
 
     @Override @Transactional(readOnly = true)
@@ -55,5 +67,21 @@ public class LostOrderServiceImpl implements LostOrderService {
             e.getCompetitorDiscount(), e.getOurDiscount(), e.getReasonDetail(),
             e.getRecoveryPossible(), e.getFollowUpDate(), e.getHandlerUserId(),
             e.getCreatedBy(), e.getCreatedTime(), e.getVersion());
+    }
+
+    private void apply(LostOrder e, LostOrderCreateDTO dto) {
+        e.setOpportunityId(dto.opportunityId());
+        e.setCustomerId(dto.customerId());
+        e.setLostType(dto.lostType());
+        e.setCompetitorName(dto.competitorName());
+        e.setCompetitorPrice(dto.competitorPrice());
+        e.setOurPrice(dto.ourPrice());
+        e.setMarginDiff(dto.marginDiff());
+        e.setCompetitorDiscount(dto.competitorDiscount());
+        e.setOurDiscount(dto.ourDiscount());
+        e.setReasonDetail(dto.reasonDetail());
+        e.setRecoveryPossible(dto.recoveryPossible());
+        e.setFollowUpDate(dto.followUpDate());
+        e.setHandlerUserId(dto.handlerUserId());
     }
 }

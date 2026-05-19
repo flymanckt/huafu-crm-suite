@@ -7,5 +7,8 @@ import com.huafu.crm.performance.vo.VisitRecordVO;
 
 public interface VisitRecordService {
     VisitRecordVO create(VisitRecordCreateDTO dto);
+    VisitRecordVO getById(Long id);
+    VisitRecordVO update(Long id, VisitRecordCreateDTO dto);
+    boolean delete(Long id);
     PageResult<VisitRecordVO> page(VisitRecordQuery query);
 }

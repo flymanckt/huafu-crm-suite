@@ -7,5 +7,8 @@ import com.huafu.crm.opportunity.vo.LostOrderVO;
 
 public interface LostOrderService {
     LostOrderVO create(LostOrderCreateDTO dto);
+    LostOrderVO getById(Long id);
+    LostOrderVO update(Long id, LostOrderCreateDTO dto);
+    boolean delete(Long id);
     PageResult<LostOrderVO> page(LostOrderQuery query);
 }

@@ -20,6 +20,15 @@ public class VisitRecordController {
     @PostMapping @Operation(summary = "创建拜访记录")
     public Result<VisitRecordVO> create(@RequestBody VisitRecordCreateDTO dto) { return Result.ok(service.create(dto)); }
 
+    @GetMapping("/{id}") @Operation(summary = "获取拜访记录详情")
+    public Result<VisitRecordVO> getById(@PathVariable Long id) { return Result.ok(service.getById(id)); }
+
+    @PutMapping("/{id}") @Operation(summary = "更新拜访记录")
+    public Result<VisitRecordVO> update(@PathVariable Long id, @RequestBody VisitRecordCreateDTO dto) { return Result.ok(service.update(id, dto)); }
+
+    @DeleteMapping("/{id}") @Operation(summary = "删除拜访记录")
+    public Result<Boolean> delete(@PathVariable Long id) { return Result.ok(service.delete(id)); }
+
     @GetMapping("/page") @Operation(summary = "分页查询拜访记录")
     public Result<PageResult<VisitRecordVO>> page(VisitRecordQuery query) { return Result.ok(service.page(query)); }
 }

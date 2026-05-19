@@ -6,7 +6,7 @@
           <span>线索与商情</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
-            <el-button type="primary" @click="showDialog = true"><el-icon><Plus /></el-icon>录入线索</el-button>
+            <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>录入线索</el-button>
           </div>
         </div>
       </template>
@@ -45,27 +45,41 @@
           </template>
         </el-table-column>
         <el-table-column v-if="columnVisible('createdTime')" prop="createdTime" label="创建时间" width="170" />
+        <el-table-column label="操作" width="130" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <el-pagination v-if="total>0" style="margin-top:16px;justify-content:flex-end"
         v-model:current-page="query.current" v-model:page-size="query.size"
         :total="total" layout="total, prev, pager, next" @page-change="loadData" @size-change="loadData" />
     </el-card>
 
-    <el-dialog v-model="showDialog" title="录入线索" width="560">
+    <el-dialog v-model="showDialog" :title="editingId ? '编辑线索' : '录入线索'" width="620">
       <el-form :model="form" label-width="100px">
-        <el-form-item label="类型"><DictSelect v-model="form.leadType" dict-code="lead_type" value-type="number" /></el-form-item>
-        <el-form-item label="客户名称"><el-input v-model="form.customerName" /></el-form-item>
-        <el-form-item label="联系人"><el-input v-model="form.contactName" /></el-form-item>
-        <el-form-item label="联系电话"><el-input v-model="form.contactPhone" /></el-form-item>
-        <el-form-item label="意向产品"><el-input v-model="form.productName" /></el-form-item>
-        <el-form-item label="竞品名称" v-if="form.leadType===1"><el-input v-model="form.competitorName" /></el-form-item>
-        <el-form-item label="竞品价格" v-if="form.leadType===1"><el-input-number v-model="form.competitorPrice" :precision="2" /></el-form-item>
-        <el-form-item label="来源"><DictSelect v-model="form.source" dict-code="lead_source" value-type="number" /></el-form-item>
-        <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="类型"><DictSelect v-model="form.leadType" dict-code="lead_type" value-type="number" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="来源"><DictSelect v-model="form.source" dict-code="lead_source" value-type="number" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="客户名称"><el-input v-model="form.customerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="客户ID"><el-input v-model="form.customerId" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="联系人"><el-input v-model="form.contactName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="联系电话"><el-input v-model="form.contactPhone" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="省份"><el-input v-model="form.province" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="城市"><el-input v-model="form.city" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="意向产品"><el-input v-model="form.productName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="经办人ID"><el-input v-model="form.handlerUserId" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="竞品名称"><el-input v-model="form.competitorName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="竞品价格"><el-input-number v-model="form.competitorPrice" :precision="2" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="竞品折扣"><el-input-number v-model="form.competitorDiscount" :precision="2" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="毛利率"><el-input-number v-model="form.marginRate" :precision="2" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="3" /></el-form-item></el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">提交</el-button>
+        <el-button type="primary" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
     <ColumnConfigDrawer :page-code="pageCode" :default-columns="defaultColumns" />
@@ -75,13 +89,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus, Setting } from '@element-plus/icons-vue'
-import { getLeadPage, createLead } from '@/api/opportunity'
+import { getLeadPage, createLead, updateLead, deleteLead } from '@/api/opportunity'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -113,7 +127,10 @@ const defaultColumns = [
 const columnConfig = useColumnConfig({ pageCode, defaultColumns })
 const columnVisible = key => columnConfig.columns.value.find(c => c.key === key)?.visible !== false
 const showDialog = ref(false)
-const form = ref({ leadType: 2, customerName: '', contactName: '', contactPhone: '', productName: '', competitorName: '', competitorPrice: null, source: 3, remark: '' })
+const editingId = ref(null)
+const userInfo = () => JSON.parse(localStorage.getItem('userInfo') || '{}')
+const defaultForm = () => ({ leadType: 2, customerId: null, customerName: '', contactName: '', contactPhone: '', province: '', city: '', productName: '', competitorName: '', competitorPrice: null, competitorDiscount: null, marginRate: null, source: 3, creatorUserId: userInfo().id || 1, handlerUserId: null, remark: '' })
+const form = ref(defaultForm())
 const batchFields = [
   { key: 'leadType', label: '类型', dictCode: 'lead_type', valueType: 'number' },
   { key: 'status', label: '状态', dictCode: 'lead_status', valueType: 'number' },
@@ -133,11 +150,34 @@ const resetQuery = () => {
   loadData()
 }
 
-const handleCreate = async () => {
-  await createLead(form.value)
-  ElMessage.success('录入成功')
+const openCreate = () => {
+  editingId.value = null
+  form.value = defaultForm()
+  showDialog.value = true
+}
+
+const openEdit = (row) => {
+  editingId.value = row.id
+  form.value = { ...defaultForm(), ...row, creatorUserId: row.creatorUserId || userInfo().id || 1 }
+  showDialog.value = true
+}
+
+const handleSave = async () => {
+  if (editingId.value) {
+    await updateLead(editingId.value, form.value)
+    ElMessage.success('保存成功')
+  } else {
+    await createLead(form.value)
+    ElMessage.success('录入成功')
+  }
   showDialog.value = false
-  form.value = { leadType:2, customerName:'', contactName:'', contactPhone:'', productName:'', competitorName:'', competitorPrice:null, source:3, remark:'' }
+  loadData()
+}
+
+const handleDelete = async (row) => {
+  await ElMessageBox.confirm(`确定删除线索【${row.leadNo || row.customerName || row.id}】？`, '删除确认', { type: 'warning' })
+  await deleteLead(row.id)
+  ElMessage.success('删除成功')
   loadData()
 }
 

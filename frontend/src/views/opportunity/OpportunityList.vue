@@ -6,7 +6,7 @@
           <span>商机列表</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
-            <el-button type="primary" size="small" @click="$router.push('/opportunity/new')">新建商机</el-button>
+            <el-button type="primary" size="small" @click="openCreate">新建商机</el-button>
           </div>
         </div>
       </template>
@@ -35,10 +35,12 @@
           <template #default="{ row }">{{ row.winProbability ?? '-' }}%</template>
         </el-table-column>
         <el-table-column v-if="columnVisible('expectedCloseDate')" prop="expectedCloseDate" label="预计成交日" width="110" />
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="$router.push('/opportunity/'+row.id)">详情</el-button>
+            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button link type="success" @click="handleAdvance(row)" v-if="row.stage < 5">推进</el-button>
+            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -46,13 +48,35 @@
         v-model:current-page="query.current" v-model:page-size="query.size"
         :total="total" layout="total, prev, pager, next" @page-change="loadData" @size-change="loadData" />
     </el-card>
+    <el-dialog v-model="showDialog" :title="editingId ? '编辑商机' : '新建商机'" width="680">
+      <el-form :model="form" label-width="110px">
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="商机名称"><el-input v-model="form.opportunityName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="客户ID"><el-input v-model="form.customerId" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="负责人ID"><el-input v-model="form.handlerUserId" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="阶段"><DictSelect v-model="form.stage" dict-code="opportunity_stage" value-type="number" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="产品名称"><el-input v-model="form.productName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="预计成交日"><el-date-picker v-model="form.expectedCloseDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="数量"><el-input-number v-model="form.quantity" :precision="2" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="单位"><el-input v-model="form.unit" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="赢单率"><el-input-number v-model="form.winProbability" :min="0" :max="100" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="预估金额"><el-input-number v-model="form.estimatedAmount" :precision="2" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="来源线索ID"><el-input v-model="form.sourceLeadId" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="3" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="showDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
     <ColumnConfigDrawer :page-code="pageCode" :default-columns="defaultColumns" />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getOpportunityPage, advanceOpportunityStage } from '@/api/opportunity'
+import { getOpportunityPage, createOpportunity, updateOpportunity, deleteOpportunity, advanceOpportunityStage } from '@/api/opportunity'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
@@ -66,6 +90,8 @@ const tableData = ref([])
 const total = ref(0)
 const tableRef = ref()
 const selectedRows = ref([])
+const showDialog = ref(false)
+const editingId = ref(null)
 const initialQuery = () => ({ current: 1, size: 20, stage: null, customerName: '', opportunityName: '', productName: '' })
 const query = ref(initialQuery())
 const pageCode = 'opportunity-list'
@@ -101,6 +127,9 @@ const batchFields = [
   { key: 'expectedCloseDate', label: '预计成交日', type: 'date' },
   { key: 'remark', label: '备注' }
 ]
+const userInfo = () => JSON.parse(localStorage.getItem('userInfo') || '{}')
+const defaultForm = () => ({ opportunityName: '', customerId: null, handlerUserId: userInfo().id || 1, stage: 1, productName: '', quantity: null, unit: '', estimatedAmount: null, expectedCloseDate: null, winProbability: 0, remark: '', sourceLeadId: null })
+const form = ref(defaultForm())
 
 const loadData = async () => {
   loading.value = true
@@ -117,6 +146,37 @@ const handleAdvance = async (row) => {
   await ElMessageBox.confirm(`确定将商机【${row.opportunityName}】推进到【${stageLabel[next]}】阶段？`, '推进确认')
   await advanceOpportunityStage(row.id, next)
   ElMessage.success('阶段推进成功')
+  loadData()
+}
+
+const openCreate = () => {
+  editingId.value = null
+  form.value = defaultForm()
+  showDialog.value = true
+}
+
+const openEdit = (row) => {
+  editingId.value = row.id
+  form.value = { ...defaultForm(), ...row, handlerUserId: row.handlerUserId || userInfo().id || 1 }
+  showDialog.value = true
+}
+
+const handleSave = async () => {
+  if (editingId.value) {
+    await updateOpportunity(editingId.value, form.value)
+    ElMessage.success('保存成功')
+  } else {
+    await createOpportunity(form.value)
+    ElMessage.success('创建成功')
+  }
+  showDialog.value = false
+  loadData()
+}
+
+const handleDelete = async (row) => {
+  await ElMessageBox.confirm(`确定删除商机【${row.opportunityName || row.oppNo || row.id}】？`, '删除确认', { type: 'warning' })
+  await deleteOpportunity(row.id)
+  ElMessage.success('删除成功')
   loadData()
 }
 

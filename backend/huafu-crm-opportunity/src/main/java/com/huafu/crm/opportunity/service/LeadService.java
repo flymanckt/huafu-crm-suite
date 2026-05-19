@@ -8,5 +8,7 @@ import com.huafu.crm.opportunity.vo.LeadVO;
 public interface LeadService {
     LeadVO create(LeadCreateDTO dto);
     LeadVO getById(Long id);
+    LeadVO update(Long id, LeadCreateDTO dto);
+    boolean delete(Long id);
     PageResult<LeadVO> page(LeadQuery query);
 }

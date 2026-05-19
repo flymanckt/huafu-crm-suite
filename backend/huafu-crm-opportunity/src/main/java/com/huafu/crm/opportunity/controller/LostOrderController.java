@@ -20,6 +20,15 @@ public class LostOrderController {
     @PostMapping @Operation(summary = "创建丢单记录")
     public Result<LostOrderVO> create(@RequestBody LostOrderCreateDTO dto) { return Result.ok(service.create(dto)); }
 
+    @GetMapping("/{id}") @Operation(summary = "获取丢单详情")
+    public Result<LostOrderVO> getById(@PathVariable Long id) { return Result.ok(service.getById(id)); }
+
+    @PutMapping("/{id}") @Operation(summary = "更新丢单记录")
+    public Result<LostOrderVO> update(@PathVariable Long id, @RequestBody LostOrderCreateDTO dto) { return Result.ok(service.update(id, dto)); }
+
+    @DeleteMapping("/{id}") @Operation(summary = "删除丢单记录")
+    public Result<Boolean> delete(@PathVariable Long id) { return Result.ok(service.delete(id)); }
+
     @GetMapping("/page") @Operation(summary = "分页查询丢单")
     public Result<PageResult<LostOrderVO>> page(LostOrderQuery query) { return Result.ok(service.page(query)); }
 }

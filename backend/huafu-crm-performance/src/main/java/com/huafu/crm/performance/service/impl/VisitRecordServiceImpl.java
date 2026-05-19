@@ -3,6 +3,7 @@ package com.huafu.crm.performance.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.huafu.crm.common.api.PageResult;
+import com.huafu.crm.common.exception.BizException;
 import com.huafu.crm.common.util.InputSanitizer;
 import com.huafu.crm.performance.dto.VisitRecordCreateDTO;
 import com.huafu.crm.performance.entity.CustomerAddress;
@@ -45,27 +46,7 @@ public class VisitRecordServiceImpl implements VisitRecordService {
     @Transactional
     public VisitRecordVO create(VisitRecordCreateDTO dto) {
         VisitRecord e = new VisitRecord();
-        e.setUserId(dto.userId());
-        e.setCustomerId(dto.customerId());
-        e.setCustomerName(safe(dto.customerName()));
-        e.setContactId(dto.contactId());
-        e.setContactName(safe(dto.contactName()));
-        e.setVisitDate(dto.visitDate());
-        e.setVisitType(dto.visitType());
-        e.setVisitPurpose(safe(dto.visitPurpose()));
-        e.setVisitContent(safe(dto.visitContent()));
-        e.setNextVisitPlan(dto.nextVisitPlan());
-        e.setIsNewCustomer(dto.isNewCustomer() != null ? dto.isNewCustomer() : 0);
-        e.setLongitude(dto.longitude());
-        e.setLatitude(dto.latitude());
-        e.setLocationName(safe(dto.locationName()));
-        e.setCustomerAddressId(dto.customerAddressId());
-        e.setCheckinLongitude(dto.checkinLongitude() != null ? dto.checkinLongitude() : dto.longitude());
-        e.setCheckinLatitude(dto.checkinLatitude() != null ? dto.checkinLatitude() : dto.latitude());
-        e.setCheckinAddress(safe(dto.checkinAddress() != null ? dto.checkinAddress() : dto.locationName()));
-        e.setCheckinTime(dto.checkinTime() != null ? dto.checkinTime() : OffsetDateTime.now());
-        applyAddressCheck(e);
-        e.setRemark(safe(dto.remark()));
+        apply(e, dto);
         mapper.insert(e);
 
         // 自动更新联系人最近联系时间
@@ -98,6 +79,29 @@ public class VisitRecordServiceImpl implements VisitRecordService {
         }
 
         return toVO(e);
+    }
+
+    @Override @Transactional(readOnly = true)
+    public VisitRecordVO getById(Long id) {
+        VisitRecord e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "拜访记录不存在");
+        return toVO(e);
+    }
+
+    @Override @Transactional
+    public VisitRecordVO update(Long id, VisitRecordCreateDTO dto) {
+        VisitRecord e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "拜访记录不存在");
+        apply(e, dto);
+        mapper.updateById(e);
+        return toVO(e);
+    }
+
+    @Override @Transactional
+    public boolean delete(Long id) {
+        VisitRecord e = mapper.selectById(id);
+        if (e == null) throw new BizException(2001, "拜访记录不存在");
+        return mapper.deleteById(id) > 0;
     }
 
     @Override @Transactional(readOnly = true)
@@ -188,5 +192,29 @@ public class VisitRecordServiceImpl implements VisitRecordService {
 
     private String safe(String val) {
         return InputSanitizer.safeText(val);
+    }
+
+    private void apply(VisitRecord e, VisitRecordCreateDTO dto) {
+        e.setUserId(dto.userId());
+        e.setCustomerId(dto.customerId());
+        e.setCustomerName(safe(dto.customerName()));
+        e.setContactId(dto.contactId());
+        e.setContactName(safe(dto.contactName()));
+        e.setVisitDate(dto.visitDate());
+        e.setVisitType(dto.visitType());
+        e.setVisitPurpose(safe(dto.visitPurpose()));
+        e.setVisitContent(safe(dto.visitContent()));
+        e.setNextVisitPlan(dto.nextVisitPlan());
+        e.setIsNewCustomer(dto.isNewCustomer() != null ? dto.isNewCustomer() : 0);
+        e.setLongitude(dto.longitude());
+        e.setLatitude(dto.latitude());
+        e.setLocationName(safe(dto.locationName()));
+        e.setCustomerAddressId(dto.customerAddressId());
+        e.setCheckinLongitude(dto.checkinLongitude() != null ? dto.checkinLongitude() : dto.longitude());
+        e.setCheckinLatitude(dto.checkinLatitude() != null ? dto.checkinLatitude() : dto.latitude());
+        e.setCheckinAddress(safe(dto.checkinAddress() != null ? dto.checkinAddress() : dto.locationName()));
+        e.setCheckinTime(dto.checkinTime() != null ? dto.checkinTime() : OffsetDateTime.now());
+        applyAddressCheck(e);
+        e.setRemark(safe(dto.remark()));
     }
 }

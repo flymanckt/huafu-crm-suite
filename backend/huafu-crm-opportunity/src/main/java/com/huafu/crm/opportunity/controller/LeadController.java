@@ -23,6 +23,12 @@ public class LeadController {
     @GetMapping("/{id}") @Operation(summary = "获取线索详情")
     public Result<LeadVO> getById(@PathVariable Long id) { return Result.ok(service.getById(id)); }
 
+    @PutMapping("/{id}") @Operation(summary = "更新线索/商情")
+    public Result<LeadVO> update(@PathVariable Long id, @RequestBody LeadCreateDTO dto) { return Result.ok(service.update(id, dto)); }
+
+    @DeleteMapping("/{id}") @Operation(summary = "删除线索/商情")
+    public Result<Boolean> delete(@PathVariable Long id) { return Result.ok(service.delete(id)); }
+
     @GetMapping("/page") @Operation(summary = "分页查询线索")
     public Result<PageResult<LeadVO>> page(LeadQuery query) { return Result.ok(service.page(query)); }
 }

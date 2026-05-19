@@ -1,7 +1,15 @@
 <template>
   <div class="page-container">
     <el-card>
-      <template #header><div class="card-header"><span>日报列表</span><el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" /></div></template>
+      <template #header>
+        <div class="card-header">
+          <span>日报列表</span>
+          <div class="header-actions">
+            <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
+            <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新增日报</el-button>
+          </div>
+        </div>
+      </template>
       <ConfigurableFilterForm
         v-model="query"
         :page-code="pageCode"
@@ -30,9 +38,11 @@
           </template>
         </el-table-column>
         <el-table-column v-if="columnVisible('parseError')" prop="parseError" label="错误信息" width="150" show-overflow-tooltip />
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewDetail(row)">查看</el-button>
+            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -40,6 +50,20 @@
         v-model:current-page="query.current" v-model:page-size="query.size"
         :total="total" layout="total, prev, pager, next" @page-change="loadData" @size-change="loadData" />
     </el-card>
+
+    <el-dialog v-model="showDialog" :title="editingId ? '编辑日报' : '新增日报'" width="660">
+      <el-form :model="form" label-width="90px">
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="日报日期"><el-date-picker v-model="form.reportDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="提交人ID"><el-input v-model="form.userId" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="日报内容"><el-input v-model="form.contentText" type="textarea" :rows="8" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="showDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 日报详情对话框 -->
     <el-dialog v-model="showDetail" title="日报详情" width="700">
@@ -62,13 +86,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getDailyReportPage, getDailyReportDetail } from '@/api/performance'
+import { getDailyReportPage, getDailyReportDetail, createDailyReport, updateDailyReport, deleteDailyReport } from '@/api/performance'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
-import { Setting } from '@element-plus/icons-vue'
+import { Plus, Setting } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -97,6 +122,12 @@ const columnConfig = useColumnConfig({ pageCode, defaultColumns })
 const columnVisible = key => columnConfig.columns.value.find(c => c.key === key)?.visible !== false
 const showDetail = ref(false)
 const currentReport = ref(null)
+const showDialog = ref(false)
+const editingId = ref(null)
+const today = new Date().toISOString().slice(0, 10)
+const userInfo = () => JSON.parse(localStorage.getItem('userInfo') || '{}')
+const defaultForm = () => ({ userId: userInfo().id || 1, reportDate: today, contentText: '' })
+const form = ref(defaultForm())
 
 const parseStatusLabel = { 0:'未解析', 1:'解析中', 2:'成功', 3:'失败' }
 const parseStatusType = { 0:'info', 1:'warning', 2:'success', 3:'danger' }
@@ -130,6 +161,37 @@ const viewDetail = async (row) => {
   showDetail.value = true
 }
 
+const openCreate = () => {
+  editingId.value = null
+  form.value = defaultForm()
+  showDialog.value = true
+}
+
+const openEdit = (row) => {
+  editingId.value = row.id
+  form.value = { ...defaultForm(), ...row, userId: row.userId || userInfo().id || 1 }
+  showDialog.value = true
+}
+
+const handleSave = async () => {
+  if (editingId.value) {
+    await updateDailyReport(editingId.value, form.value)
+    ElMessage.success('保存成功')
+  } else {
+    await createDailyReport(form.value)
+    ElMessage.success('创建成功')
+  }
+  showDialog.value = false
+  loadData()
+}
+
+const handleDelete = async (row) => {
+  await ElMessageBox.confirm(`确定删除日报【${row.reportNo || row.id}】？`, '删除确认', { type: 'warning' })
+  await deleteDailyReport(row.id)
+  ElMessage.success('删除成功')
+  loadData()
+}
+
 const formatJson = (j) => {
   try { return JSON.stringify(typeof j === 'string' ? JSON.parse(j) : j, null, 2) } catch { return j }
 }
@@ -140,4 +202,4 @@ const clearBatchSelection = () => { selectedRows.value = []; tableRef.value?.cle
 onMounted(loadData)
 </script>
 
-<style scoped>.card-header{display:flex;justify-content:space-between;align-items:center}.raw-text{font-size:13px;color:#606266;white-space:pre-wrap;line-height:1.6;background:#f5f7fa;padding:12px;border-radius:4px;max-height:200px;overflow-y:auto}.parsed-json{font-size:12px;background:#1d1e2c;color:#a0e9a0;padding:12px;border-radius:4px;max-height:300px;overflow:auto}</style>
+<style scoped>.card-header,.header-actions{display:flex;justify-content:space-between;align-items:center}.header-actions{gap:8px}.raw-text{font-size:13px;color:#606266;white-space:pre-wrap;line-height:1.6;background:#f5f7fa;padding:12px;border-radius:4px;max-height:200px;overflow-y:auto}.parsed-json{font-size:12px;background:#1d1e2c;color:#a0e9a0;padding:12px;border-radius:4px;max-height:300px;overflow:auto}</style>

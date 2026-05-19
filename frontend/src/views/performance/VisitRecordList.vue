@@ -6,7 +6,7 @@
           <span>拜访记录</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
-            <el-button type="primary" @click="showDialog=true"><el-icon><Plus /></el-icon>新增拜访</el-button>
+            <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新增拜访</el-button>
           </div>
         </div>
       </template>
@@ -41,13 +41,19 @@
         <el-table-column v-if="columnVisible('isNewCustomer')" prop="isNewCustomer" label="新客户" width="70" align="center">
           <template #default="{ row }"><el-tag v-if="row.isNewCustomer===1" type="success" size="small">是</el-tag><span v-else>否</span></template>
         </el-table-column>
+        <el-table-column label="操作" width="130" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <el-pagination v-if="total>0" style="margin-top:16px;justify-content:flex-end"
         v-model:current-page="query.current" v-model:page-size="query.size"
         :total="total" layout="total, prev, pager, next" @page-change="loadData" @size-change="loadData" />
     </el-card>
 
-    <el-dialog v-model="showDialog" title="新增拜访记录" width="680">
+    <el-dialog v-model="showDialog" :title="editingId ? '编辑拜访记录' : '新增拜访记录'" width="680">
       <el-form :model="form" label-width="100px">
         <el-form-item label="拜访日期"><el-date-picker v-model="form.visitDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
         <el-form-item label="拜访类型"><DictSelect v-model="form.visitType" dict-code="visit_type" value-type="number" /></el-form-item>
@@ -78,7 +84,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog=false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">提交</el-button>
+        <el-button type="primary" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
     <ColumnConfigDrawer :page-code="pageCode" :default-columns="defaultColumns" />
@@ -88,7 +94,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus, Setting } from '@element-plus/icons-vue'
-import { getVisitRecordPage, createVisitRecord } from '@/api/performance'
+import { getVisitRecordPage, createVisitRecord, updateVisitRecord, deleteVisitRecord } from '@/api/performance'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
@@ -96,7 +102,7 @@ import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilter
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { getCustomerAddressList } from '@/api/customer'
 import { regeocode } from '@/utils/amap'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -130,10 +136,12 @@ const defaultColumns = [
 const columnConfig = useColumnConfig({ pageCode, defaultColumns })
 const columnVisible = key => columnConfig.columns.value.find(c => c.key === key)?.visible !== false
 const showDialog = ref(false)
+const editingId = ref(null)
 const today = new Date().toISOString().slice(0,10)
 const locating = ref(false)
 const customerAddresses = ref([])
-const form = ref({
+const userInfo = () => JSON.parse(localStorage.getItem('userInfo') || '{}')
+const defaultForm = () => ({
   userId: 1,
   visitDate: today,
   visitType: 1,
@@ -149,8 +157,11 @@ const form = ref({
   longitude: null,
   latitude: null,
   locationName: '',
-  nextVisitPlan: null
+  nextVisitPlan: null,
+  isNewCustomer: 0,
+  remark: ''
 })
+const form = ref(defaultForm())
 
 const checkinResultText = { MATCHED: '通过', MISMATCHED: '超距', NO_ADDRESS: '无地址', UNCHECKED: '未校验' }
 const checkinTagType = { MATCHED: 'success', MISMATCHED: 'danger', NO_ADDRESS: 'warning', UNCHECKED: 'info' }
@@ -182,15 +193,41 @@ const resetQuery = () => {
   loadData()
 }
 
-const handleCreate = async () => {
+const openCreate = () => {
+  editingId.value = null
+  customerAddresses.value = []
+  form.value = { ...defaultForm(), userId: userInfo().id || 1 }
+  showDialog.value = true
+}
+
+const openEdit = async (row) => {
+  editingId.value = row.id
+  form.value = { ...defaultForm(), ...row, userId: row.userId || userInfo().id || 1 }
+  showDialog.value = true
+  await loadCustomerAddresses()
+}
+
+const handleSave = async () => {
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
   form.value.userId = userInfo.id || form.value.userId || 1
   form.value.longitude = form.value.checkinLongitude
   form.value.latitude = form.value.checkinLatitude
   form.value.locationName = form.value.checkinAddress
-  await createVisitRecord(form.value)
-  ElMessage.success('记录成功')
+  if (editingId.value) {
+    await updateVisitRecord(editingId.value, form.value)
+    ElMessage.success('保存成功')
+  } else {
+    await createVisitRecord(form.value)
+    ElMessage.success('记录成功')
+  }
   showDialog.value = false
+  loadData()
+}
+
+const handleDelete = async (row) => {
+  await ElMessageBox.confirm(`确定删除拜访记录【${row.visitNo || row.id}】？`, '删除确认', { type: 'warning' })
+  await deleteVisitRecord(row.id)
+  ElMessage.success('删除成功')
   loadData()
 }
 
