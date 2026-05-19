@@ -17,11 +17,33 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class CustomerServiceImpl implements CustomerService {
+
+    private static final Logger log = LoggerFactory.getLogger(CustomerServiceImpl.class);
+
+    // 保存后必须回查的关键字段，丢字段时记录 warn
+    private static final Set<String> CRITICAL_FIELDS = Set.of(
+        "customerName", "customerShortName", "type", "level", "status",
+        "province", "city", "district", "address",
+        "mainContactName", "mainContactPhone", "mainContactRole",
+        "annualRevenue", "creditLimit", "taxRate", "paymentDays",
+        "sapCustomerCode", "ownerUserId", "ownerDeptId",
+        "customerCategory", "customerSegment", "businessType",
+        "countryRegion", "mainBrand", "annualYarnVolume",
+        "machineCount", "productionCapacity", "industryPosition",
+        "mainCustomerGroup", "bundleCustomerName", "bundleBrand",
+        "salesMerchandiser", "locationLat", "locationLng",
+        "unifiedSocialCreditCode", "englishName", "assetType",
+        "customerSource", "customerStage", "blacklist", "riskLevel",
+        "taxId", "bankName", "bankAccount", "invoiceTitle"
+    );
 
     // 客户等级：数字 → itemCode
     private static final Map<Integer, String> LEVEL_MAP = Map.of(
@@ -55,7 +77,6 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public CustomerVO create(CustomerCreateDTO dto) {
-        // 自动生成客户编码（如果前端没传）
         String customerCode = dto.customerCode();
         if (customerCode == null || customerCode.isBlank()) {
             customerCode = "C-" + String.valueOf(System.currentTimeMillis()).substring(5)
@@ -135,7 +156,9 @@ public class CustomerServiceImpl implements CustomerService {
         c.setCountryCode(safeInput(dto.countryCode()));
         c.setRegion(safeInput(dto.region()));
         mapper.insert(c);
-        return toVO(c);
+        Customer refreshed = mapper.selectById(c.getId());
+        validateAfterSave(dto, refreshed, "create");
+        return toVO(refreshed);
     }
 
     @Override
@@ -207,6 +230,7 @@ public class CustomerServiceImpl implements CustomerService {
         if (c.getVersion() == null) c.setVersion(0);
         mapper.updateById(c);
         Customer refreshed = mapper.selectById(id);
+        validateAfterSave(dto, refreshed, "update");
         return toVO(refreshed);
     }
 
@@ -321,6 +345,98 @@ public class CustomerServiceImpl implements CustomerService {
             c.setRemark("流失原因：" + lossReason);
         }
         mapper.updateById(c);
+    }
+
+    /**
+     * 保存后回查关键字段，检测丢字段情况并记录 warn 日志。
+     * 当检测到字段丢失时记录日志但不抛异常，由前端负责阻断发布。
+     */
+    private void validateAfterSave(CustomerCreateDTO dto, Customer saved, String operation) {
+        if (saved == null) {
+            log.warn("[CustomerSaveValidation] {} 后回查结果为 null，customerId 可能丢失", operation);
+            return;
+        }
+        // 检测关键字段是否在入库后丢失
+        if (dto.customerName() != null && saved.getCustomerName() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 customerName 丢失，提交值={}, 实际值={}",
+                operation, dto.customerName(), saved.getCustomerName());
+        }
+        if (dto.customerShortName() != null && saved.getCustomerShortName() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 customerShortName 丢失，提交值={}, 实际值={}",
+                operation, dto.customerShortName(), saved.getCustomerShortName());
+        }
+        if (dto.sapCustomerCode() != null && saved.getSapCustomerCode() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 sapCustomerCode 丢失，提交值={}, 实际值={}",
+                operation, dto.sapCustomerCode(), saved.getSapCustomerCode());
+        }
+        if (dto.mainContactName() != null && saved.getMainContactName() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 mainContactName 丢失，提交值={}, 实际值={}",
+                operation, dto.mainContactName(), saved.getMainContactName());
+        }
+        if (dto.mainContactPhone() != null && saved.getMainContactPhone() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 mainContactPhone 丢失，提交值={}, 实际值={}",
+                operation, dto.mainContactPhone(), saved.getMainContactPhone());
+        }
+        if (dto.province() != null && saved.getProvince() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 province 丢失，提交值={}, 实际值={}",
+                operation, dto.province(), saved.getProvince());
+        }
+        if (dto.city() != null && saved.getCity() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 city 丢失，提交值={}, 实际值={}",
+                operation, dto.city(), saved.getCity());
+        }
+        if (dto.district() != null && saved.getDistrict() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 district 丢失，提交值={}, 实际值={}",
+                operation, dto.district(), saved.getDistrict());
+        }
+        if (dto.address() != null && saved.getAddress() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 address 丢失，提交值={}, 实际值={}",
+                operation, dto.address(), saved.getAddress());
+        }
+        if (dto.unifiedSocialCreditCode() != null && saved.getUnifiedSocialCreditCode() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 unifiedSocialCreditCode 丢失，提交值={}, 实际值={}",
+                operation, dto.unifiedSocialCreditCode(), saved.getUnifiedSocialCreditCode());
+        }
+    }
+
+    /**
+     * 保存后回查关键字段（update DTO 版本）。
+     */
+    private void validateAfterSave(CustomerUpdateDTO dto, Customer saved, String operation) {
+        if (saved == null) {
+            log.warn("[CustomerSaveValidation] {} 后回查结果为 null", operation);
+            return;
+        }
+        if (dto.customerName() != null && saved.getCustomerName() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 customerName 丢失，提交值={}", operation, dto.customerName());
+        }
+        if (dto.customerShortName() != null && saved.getCustomerShortName() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 customerShortName 丢失，提交值={}", operation, dto.customerShortName());
+        }
+        if (dto.sapCustomerCode() != null && saved.getSapCustomerCode() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 sapCustomerCode 丢失，提交值={}", operation, dto.sapCustomerCode());
+        }
+        if (dto.mainContactName() != null && saved.getMainContactName() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 mainContactName 丢失，提交值={}", operation, dto.mainContactName());
+        }
+        if (dto.mainContactPhone() != null && saved.getMainContactPhone() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 mainContactPhone 丢失，提交值={}", operation, dto.mainContactPhone());
+        }
+        if (dto.province() != null && saved.getProvince() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 province 丢失，提交值={}", operation, dto.province());
+        }
+        if (dto.city() != null && saved.getCity() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 city 丢失，提交值={}", operation, dto.city());
+        }
+        if (dto.district() != null && saved.getDistrict() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 district 丢失，提交值={}", operation, dto.district());
+        }
+        if (dto.address() != null && saved.getAddress() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 address 丢失，提交值={}", operation, dto.address());
+        }
+        if (dto.unifiedSocialCreditCode() != null && saved.getUnifiedSocialCreditCode() == null) {
+            log.warn("[CustomerSaveValidation] {} 后 unifiedSocialCreditCode 丢失，提交值={}", operation, dto.unifiedSocialCreditCode());
+        }
     }
 
     private CustomerVO toVO(Customer c) {

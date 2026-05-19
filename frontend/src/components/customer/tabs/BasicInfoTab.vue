@@ -209,9 +209,9 @@
 
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { updateCustomer } from '@/api/customer'
+import { updateCustomer, getCustomerDetail } from '@/api/customer'
 import { getDeptTree, getUserPage } from '@/api/admin'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import AddressPicker from '@/components/common/AddressPicker.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import { geocodeAddress } from '@/utils/amap'
@@ -317,9 +317,45 @@ const handleSave = async () => {
     await updateCustomer(props.customerId, buildCustomerUpdatePayload(formData.value))
     ElMessage.success('保存成功')
     isEditing.value = false
+    // P0-1：保存后强制回查，检测丢字段
+    await verifySavedData()
     emit('updated')
   } finally {
     saving.value = false
+  }
+}
+
+/**
+ * P0-1：保存后回查，检测关键字段是否在保存后丢失
+ * 如果发现丢字段，弹窗警告但不阻塞流程
+ */
+const verifySavedData = async () => {
+  try {
+    const refreshed = await getCustomerDetail(props.customerId)
+    const original = formData.value
+    const lostFields = []
+
+    const keyFields = [
+      'customerName', 'customerShortName', 'sapCustomerCode',
+      'mainContactName', 'mainContactPhone', 'province', 'city',
+      'district', 'address', 'unifiedSocialCreditCode'
+    ]
+    for (const field of keyFields) {
+      if (original[field] !== undefined && original[field] !== null && original[field] !== '') {
+        if (refreshed[field] === undefined || refreshed[field] === null || refreshed[field] === '') {
+          lostFields.push(field)
+        }
+      }
+    }
+    if (lostFields.length > 0) {
+      await ElMessageBox.alert(
+        `检测到以下字段保存后丢失，请联系管理员排查：\n${lostFields.join('、')}`,
+        '数据异常警告',
+        { type: 'warning', confirmButtonText: '知道了' }
+      )
+    }
+  } catch (e) {
+    console.warn('[BasicInfoTab] 回查失败', e)
   }
 }
 

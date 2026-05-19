@@ -28,7 +28,7 @@
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-          <el-popconfirm :title="row.isMain === 1 ? '主联系人不能直接删除，请先更换' : '确定删除？'" @confirm="handleDelete(row)">
+          <el-popconfirm title="确定删除该联系人？" @confirm="handleDelete(row)">
             <template #reference><el-button link type="danger" size="small">删除</el-button></template>
           </el-popconfirm>
           <el-button v-if="row.isMain !== 1 && !row.parentContactId" link type="warning" size="small" @click="handleSetMain(row)">设主</el-button>
@@ -189,10 +189,7 @@ const handleSave = async () => {
 }
 
 const handleDelete = async (row) => {
-  if (row.isMain === 1) {
-    ElMessage.warning('主联系人不能直接删除，请先更换')
-    return
-  }
+  // P1-5: 软删除，主联系人也可删除（由后端处理 is_active=0）
   await deleteContactV1(props.customerId, row.id)
   ElMessage.success('删除成功')
   emit('updated')
