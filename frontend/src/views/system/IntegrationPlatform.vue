@@ -108,7 +108,9 @@
             <el-table-column prop="parameterMode" label="传参模式" width="100">
               <template #default="{ row }"><el-tag>{{ parameterModeLabel(row.parameterMode) }}</el-tag></template>
             </el-table-column>
-            <el-table-column prop="parameterGroup" label="参数组/表名" min-width="150" show-overflow-tooltip />
+            <el-table-column label="参数位置/表名" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ mappingParameterLocation(row) }}</template>
+            </el-table-column>
             <el-table-column prop="mappingDirection" label="方向" width="110" />
             <el-table-column prop="sourceModule" label="CRM模块" min-width="150">
               <template #default="{ row }">{{ moduleLabel(row.sourceModule) }}</template>
@@ -116,8 +118,11 @@
             <el-table-column label="CRM字段" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">{{ row.sourceFieldLabel || row.sourceField }}</template>
             </el-table-column>
-            <el-table-column label="接口字段" min-width="180" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.targetFieldLabel || row.targetField }}</template>
+            <el-table-column label="接口单值字段" min-width="170" show-overflow-tooltip>
+              <template #default="{ row }">{{ interfaceScalarFieldText(row) }}</template>
+            </el-table-column>
+            <el-table-column label="表内字段" min-width="170" show-overflow-tooltip>
+              <template #default="{ row }">{{ tableFieldText(row) }}</template>
             </el-table-column>
             <el-table-column prop="fieldType" label="类型" width="110" />
             <el-table-column label="必填" width="80">
@@ -356,8 +361,8 @@
           </el-col>
           <el-col :span="8"><el-form-item label="序号"><el-input-number v-model="mappingForm.sortOrder" /></el-form-item></el-col>
           <el-col :span="12">
-            <el-form-item label="参数组/表名">
-              <el-input v-model="mappingForm.parameterGroup" :placeholder="mappingForm.parameterMode === 'TABLE' ? '如 ET_CUSTOMER / items' : '如 IMPORT / body / query'" />
+            <el-form-item :label="parameterGroupLabel">
+              <el-input v-model="mappingForm.parameterGroup" :placeholder="parameterGroupPlaceholder" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -392,13 +397,22 @@
               <el-input v-model="mappingForm.sourceFieldLabel" placeholder="自动带出，可手工调整" />
             </el-form-item>
           </el-col>
+          <el-col :span="24" v-if="isTableMapping">
+            <el-alert
+              class="table-field-alert"
+              title="表参数会先按上面的表/数组名称定位参数，再把这里的表内字段作为每一行中的列字段。"
+              type="success"
+              show-icon
+              :closable="false"
+            />
+          </el-col>
           <el-col :span="12">
-            <el-form-item label="接口字段">
-              <el-input v-model="mappingForm.targetField" placeholder="SAP参数名、表字段名、JSON Path 或外部接口字段" />
+            <el-form-item :label="targetFieldLabel">
+              <el-input v-model="mappingForm.targetField" :placeholder="targetFieldPlaceholder" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="接口字段名">
+            <el-form-item :label="targetFieldNameLabel">
               <el-input v-model="mappingForm.targetFieldLabel" placeholder="展示名，可选" />
             </el-form-item>
           </el-col>
@@ -595,6 +609,12 @@ const contentTypes = ['application/json', 'application/xml', 'text/xml', 'applic
 const interfaceMode = computed(() => sapProtocols.includes(interfaceForm.value.protocol) ? 'SAP' : 'GENERIC')
 const availableProtocols = computed(() => interfaceMode.value === 'SAP' ? sapProtocolOptions : genericProtocolOptions)
 const isSapRfcInterface = computed(() => interfaceForm.value.protocol === 'SAP_RFC')
+const isTableMapping = computed(() => mappingForm.value.parameterMode === 'TABLE')
+const parameterGroupLabel = computed(() => isTableMapping.value ? '表/数组名称' : '参数位置')
+const parameterGroupPlaceholder = computed(() => isTableMapping.value ? 'SAP TABLES参数名，如 IT_CUSTOMER；或JSON数组名，如 items' : '如 IMPORT / EXPORT / body / query')
+const targetFieldLabel = computed(() => isTableMapping.value ? '表内字段名' : '接口字段')
+const targetFieldNameLabel = computed(() => isTableMapping.value ? '表字段显示名' : '接口字段名')
+const targetFieldPlaceholder = computed(() => isTableMapping.value ? '表参数行内字段，如 KUNNR、NAME1、MATNR' : 'SAP单值参数名、JSON Path 或外部接口字段')
 const connectionLabel = computed(() => {
   if (isSapRfcInterface.value) return 'SAP RFC配置'
   return interfaceMode.value === 'SAP' ? 'SAP连接配置' : '连接配置'
@@ -907,11 +927,11 @@ function validateMappingPayload(payload) {
     return false
   }
   if (!payload.targetField) {
-    ElMessage.warning('请填写接口字段')
+    ElMessage.warning(payload.parameterMode === 'TABLE' ? '请填写表内字段名' : '请填写接口字段')
     return false
   }
   if (payload.parameterMode === 'TABLE' && !payload.parameterGroup) {
-    ElMessage.warning('表参数需要填写参数组或表名')
+    ElMessage.warning('表参数需要填写表/数组名称')
     return false
   }
   return true
@@ -919,6 +939,21 @@ function validateMappingPayload(payload) {
 
 function parameterModeLabel(value) {
   return parameterModes[value] || value || '单值'
+}
+
+function mappingParameterLocation(row) {
+  if (row.parameterMode === 'TABLE') return row.parameterGroup ? `表参数：${row.parameterGroup}` : '表参数：未填写'
+  return row.parameterGroup || '单值参数'
+}
+
+function interfaceScalarFieldText(row) {
+  if (row.parameterMode === 'TABLE') return '-'
+  return row.targetFieldLabel || row.targetField || '-'
+}
+
+function tableFieldText(row) {
+  if (row.parameterMode !== 'TABLE') return '-'
+  return row.targetFieldLabel || row.targetField || '-'
 }
 
 function moduleLabel(value) {
@@ -955,6 +990,6 @@ onMounted(() => {
 .card-header { justify-content: space-between; }
 .toolbar { margin-bottom: 12px; }
 .pager { margin-top: 12px; justify-content: flex-end; }
-.interface-alert { margin-bottom: 14px; }
+.interface-alert, .table-field-alert { margin-bottom: 14px; }
 .interface-dialog :deep(.el-radio-button__inner) { min-width: 92px; }
 </style>

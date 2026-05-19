@@ -104,11 +104,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Override
     @Transactional
     public void deleteConnectionConfig(Long id) {
-        IntegrationConnectionConfig entity = requireConnection(id);
-        entity.setDeleted((short) 1);
-        entity.setUpdatedBy(currentUserId());
-        entity.setUpdatedTime(LocalDateTime.now());
-        connectionMapper.updateById(entity);
+        requireConnection(id);
+        connectionMapper.deleteById(id);
     }
 
     @Override
@@ -169,11 +166,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Override
     @Transactional
     public void deleteSapRfcConfig(Long id) {
-        SapRfcConfig entity = requireSapConfig(id);
-        entity.setDeleted((short) 1);
-        entity.setUpdatedBy(currentUserId());
-        entity.setUpdatedTime(LocalDateTime.now());
-        sapRfcConfigMapper.updateById(entity);
+        requireSapConfig(id);
+        sapRfcConfigMapper.deleteById(id);
     }
 
     @Override
@@ -244,11 +238,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Override
     @Transactional
     public void deleteInterface(Long id) {
-        IntegrationInterface entity = requireInterface(id);
-        entity.setDeleted((short) 1);
-        entity.setUpdatedBy(currentUserId());
-        entity.setUpdatedTime(LocalDateTime.now());
-        interfaceMapper.updateById(entity);
+        requireInterface(id);
+        interfaceMapper.deleteById(id);
     }
 
     @Override
@@ -289,10 +280,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Override
     @Transactional
     public void deleteMapping(Long id) {
-        IntegrationFieldMapping entity = requireMapping(id);
-        entity.setDeleted((short) 1);
-        entity.setUpdatedTime(LocalDateTime.now());
-        mappingMapper.updateById(entity);
+        requireMapping(id);
+        mappingMapper.deleteById(id);
     }
 
     @Override
