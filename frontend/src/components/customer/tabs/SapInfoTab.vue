@@ -9,8 +9,8 @@
     <el-table :data="tableData" stripe border size="small" class="sap-table">
       <el-table-column prop="sapCode" label="SAP编号" width="150">
         <template #default="{ row }">
-          <el-input v-if="row._editing" v-model="row.sapCode" size="small" />
-          <span v-else>{{ row.sapCode }}</span>
+          <el-input v-if="row._editing" v-model="row.sapCode" size="small" placeholder="SAP返回后回填" />
+          <span v-else>{{ row.sapCode || '-' }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="isDefault" label="默认" width="80" align="center">
@@ -88,10 +88,6 @@ const handleEdit = (row) => {
 const handleSaveRow = async () => {
   const row = tableData.value.find(item => item._editing)
   if (!row) return
-  if (!row.sapCode) {
-    ElMessage.warning('请填写SAP编号')
-    return
-  }
   saving.value = true
   const payload = { ...row }
   delete payload._editing
@@ -103,7 +99,7 @@ const handleSaveRow = async () => {
       await updateSapInfoV1(props.customerId, row.id, payload)
     }
     await loadData()
-    ElMessage.success('保存成功')
+    ElMessage.success('保存成功，已生成SAP_CUS推送任务')
   } finally {
     saving.value = false
   }

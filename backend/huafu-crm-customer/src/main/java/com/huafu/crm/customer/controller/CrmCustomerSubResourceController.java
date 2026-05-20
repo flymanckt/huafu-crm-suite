@@ -143,6 +143,12 @@ public class CrmCustomerSubResourceController {
         return Result.ok(sapInfoService.update(sapInfoId, sapInfo));
     }
 
+    @PostMapping("/{id}/sap-infos/{sapInfoId}/sap-response")
+    @Operation(summary = "SAP回传客户SAP主数据")
+    public Result<CrmCustomerSapInfo> applySapInfoResponse(@PathVariable Long id, @PathVariable Long sapInfoId, @RequestBody CrmCustomerSapInfo sapInfo) {
+        return Result.ok(sapInfoService.applySapResponse(id, sapInfoId, sapInfo));
+    }
+
     @DeleteMapping("/{id}/sap-infos/{sapInfoId}")
     @Operation(summary = "删除客户SAP主数据")
     public Result<Void> deleteSapInfo(@PathVariable Long id, @PathVariable Long sapInfoId) {

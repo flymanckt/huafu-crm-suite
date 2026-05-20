@@ -10,5 +10,6 @@ public interface CrmCustomerSapInfoService {
     PageResult<CrmCustomerSapInfo> pageByCustomerId(Long customerId, long current, long size);
     CrmCustomerSapInfo create(Long customerId, CrmCustomerSapInfo info);
     CrmCustomerSapInfo update(Long id, CrmCustomerSapInfo info);
+    CrmCustomerSapInfo applySapResponse(Long customerId, Long id, CrmCustomerSapInfo info);
     void delete(Long id);
 }
