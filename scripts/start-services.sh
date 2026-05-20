@@ -6,6 +6,8 @@ BACKEND_DIR="$ROOT_DIR/backend"
 LOG_DIR="$ROOT_DIR/logs"
 PID_DIR="$LOG_DIR/pids"
 SERVICES="${SERVICES:-gateway customer opportunity performance target ai wecom}"
+SAP_JCO_LIB_DIR="${SAP_JCO_LIB_DIR:-$BACKEND_DIR/lib}"
+SAP_JCO_NATIVE_DIR="${SAP_JCO_NATIVE_DIR:-$SAP_JCO_LIB_DIR}"
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
@@ -64,6 +66,26 @@ find_jar() {
   find "$target" -maxdepth 1 -name "${module}-*.jar" ! -name "*.original" | sort | tail -n 1
 }
 
+start_java_service() {
+  local service="$1"
+  local jar="$2"
+  local log_file="$3"
+  local -a java_cmd=(java)
+  if [[ -n "${JAVA_OPTS:-}" ]]; then
+    # shellcheck disable=SC2206
+    java_cmd+=(${JAVA_OPTS})
+  fi
+  if [[ "$service" == "customer" && -f "$SAP_JCO_LIB_DIR/sapjco3.jar" ]]; then
+    echo "[start] customer SAP JCo lib detected: $SAP_JCO_LIB_DIR"
+    nohup "${java_cmd[@]}" \
+      -Djava.library.path="$SAP_JCO_NATIVE_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+      -cp "$jar:$SAP_JCO_LIB_DIR/*" \
+      org.springframework.boot.loader.launch.JarLauncher > "$log_file" 2>&1 &
+  else
+    nohup "${java_cmd[@]}" -jar "$jar" > "$log_file" 2>&1 &
+  fi
+}
+
 for service in $SERVICES; do
   module="$(module_of "$service")"
   if [[ -z "$module" ]]; then
@@ -97,7 +119,7 @@ for service in $SERVICES; do
   fi
 
   echo "[start] $service -> $jar"
-  nohup java -jar "$jar" > "$log_file" 2>&1 &
+  start_java_service "$service" "$jar" "$log_file"
   echo $! > "$pid_file"
 done
 

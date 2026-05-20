@@ -400,7 +400,7 @@ CRM 是高频工作系统，不是展示型官网。页面应保持：
 
 1. 新增外部系统对接必须先建连接配置和接口定义，再写业务调用逻辑。
 2. 字段映射是接口契约的一部分，禁止把字段转换规则硬编码在页面里。
-3. SAP RFC 真实调用应由后续 SAP JCo 执行器接入，不在 Controller 中直接调用 SAP。
+3. SAP RFC 真实调用统一通过 `SapJcoService` 执行，不在 Controller 或业务页面中直接调用 SAP。
 4. 密钥、密码、token、签名密钥等敏感配置必须加密或脱敏展示。
 5. 所有出站和入站数据都必须写平台日志，失败数据必须可查询、可定位、可重推。
 
@@ -636,12 +636,12 @@ CRM 是高频工作系统，不是展示型官网。页面应保持：
 
 ### 11.20 集成平台与 SAP 对接
 
-现状：已新增集成平台基础模型和页面入口，支持通用连接配置、SAP RFC 配置、SAP/通用接口定义、结构化字段映射、平台日志、自动消费待推送日志和异常重推。客户主数据的 SAP 信息保存会生成 `SAP_CUS` 待推送日志，SAP 编号允许先为空，并提供 SAP 回传接口用于回填编号和相关字段。HTTP 类接口已可直接执行；SAP RFC 执行依赖 `sapjco3.jar` 和对应本机库，运行时缺失 JCo 时日志会从 `PENDING` 转为 `FAILED` 并写明原因。
+现状：已新增集成平台基础模型和页面入口，支持通用连接配置、SAP RFC 配置、SAP/通用接口定义、结构化字段映射、平台日志、自动消费待推送日志和异常重推。客户主数据的 SAP 信息保存会生成 `SAP_CUS` 待推送日志，SAP 编号允许先为空，并提供 SAP 回传接口用于回填编号和相关字段。HTTP 类接口已可直接执行；SAP RFC 已接入独立 `SapJcoService`，由运行时加载 `sapjco3.jar` 和对应本机库，运行时缺失 JCo 时日志会从 `PENDING` 转为 `FAILED` 并写明原因。
 
 优化方向：
 
 1. 将 SAP RFC、SAP OData、SAP IDoc 与通用 REST/SOAP/Webhook/SFTP/MQ/DB 统一纳入集成平台管理。
-2. 完成生产级 SAP JCo 部署：将 `sapjco3.jar` 和对应本机库加入 customer 服务运行时 classpath/library path，按 `connectionCode` 获取 RFC 连接池，按接口定义调用 BAPI/RFC 函数。
+2. 完成生产级 SAP JCo 部署：将 `sapjco3.jar` 和对应本机库放入 `backend/lib`，或设置 `SAP_JCO_LIB_DIR` / `SAP_JCO_NATIVE_DIR`，由启动脚本自动加入 customer 服务运行时 classpath/library path。
 3. 建立标准执行链路：业务触发、按单值参数/表参数生成报文、接口调用、响应解析、日志落库、失败重试。
 4. 字段映射继续增强转换函数，例如日期格式转换、字典映射、固定值、组合字段、空值兜底。
 5. 平台日志支持按接口、业务键、状态、时间、异常关键词查询，并支持批量重推。
@@ -834,11 +834,12 @@ CRM 是高频工作系统，不是展示型官网。页面应保持：
 2. 如果是 SAP RFC，对应维护 SAP RFC 专用配置；如果是 REST/SOAP/Webhook/SFTP/MQ/DB，维护通用连接配置。
 3. 新增接口定义，先选择 `SAP接口` 或 `通用接口`，再设置接口编码、协议、方向、业务模块、函数名或接口路径。
 4. 配置结构化字段映射，明确单值参数或表参数、参数组/表名、CRM 模块、CRM 字段、外部字段、字段类型、必填、默认值和转换规则。
-5. 业务代码只调用集成平台服务，不直接散落 HTTP、RFC 或 MQ 调用。
-6. 每次调用必须写入平台日志，失败时记录请求、响应、异常和重试次数。
-7. 异常数据通过日志页重新推送；批量重推需要确认影响范围和权限。
-8. 客户 SAP 信息保存后会按 `CUSTOMER_SAP_INFO:{customerId}:{sapInfoId}` 写入 `SAP_CUS` 日志；SAP 回传可调用 `/crm/v1/customers/{customerId}/sap-infos/{sapInfoId}/sap-response` 回填 `sapCode` 等字段。
-9. 平台日志支持 `PENDING -> RUNNING -> SUCCESS/FAILED/RETRYING` 状态流转，定时任务默认每 30 秒消费待推送日志，也可在日志页手工点击“立即推送”或“执行待推送”。
+5. SAP RFC 调用由 `SapJcoService` 统一处理 JCo destination、连接测试、单值参数、表参数和执行结果回写。
+6. 业务代码只调用集成平台服务，不直接散落 HTTP、RFC 或 MQ 调用。
+7. 每次调用必须写入平台日志，失败时记录请求、响应、异常和重试次数。
+8. 异常数据通过日志页重新推送；批量重推需要确认影响范围和权限。
+9. 客户 SAP 信息保存后会按 `CUSTOMER_SAP_INFO:{customerId}:{sapInfoId}` 写入 `SAP_CUS` 日志；SAP 回传可调用 `/crm/v1/customers/{customerId}/sap-infos/{sapInfoId}/sap-response` 回填 `sapCode` 等字段。
+10. 平台日志支持 `PENDING -> RUNNING -> SUCCESS/FAILED/RETRYING` 状态流转，定时任务默认每 30 秒消费待推送日志，也可在日志页手工点击“立即推送”或“执行待推送”。
 
 ## 14. 测试与验收标准
 

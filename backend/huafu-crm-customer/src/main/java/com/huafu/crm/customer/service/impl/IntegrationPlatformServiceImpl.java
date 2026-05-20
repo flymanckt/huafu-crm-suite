@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huafu.crm.common.api.PageResult;
 import com.huafu.crm.common.context.UserContext;
@@ -26,25 +25,19 @@ import com.huafu.crm.customer.mapper.IntegrationInterfaceMapper;
 import com.huafu.crm.customer.mapper.IntegrationLogMapper;
 import com.huafu.crm.customer.mapper.SapRfcConfigMapper;
 import com.huafu.crm.customer.service.IntegrationPlatformService;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import com.huafu.crm.customer.service.sap.SapJcoResult;
+import com.huafu.crm.customer.service.sap.SapJcoService;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -59,8 +52,6 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private static final Set<String> MAPPING_DIRECTIONS = Set.of("OUTBOUND", "INBOUND", "BIDIRECTIONAL");
     private static final Set<String> HTTP_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SAP_ODATA");
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-    private static final Map<String, Properties> JCO_DESTINATION_PROPS = new ConcurrentHashMap<>();
-    private static volatile boolean jcoProviderRegistered = false;
 
     private final IntegrationConnectionConfigMapper connectionMapper;
     private final SapRfcConfigMapper sapRfcConfigMapper;
@@ -68,6 +59,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private final IntegrationFieldMappingMapper mappingMapper;
     private final IntegrationLogMapper logMapper;
     private final UserContext userContext;
+    private final SapJcoService sapJcoService;
 
     public IntegrationPlatformServiceImpl(
         IntegrationConnectionConfigMapper connectionMapper,
@@ -75,7 +67,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         IntegrationInterfaceMapper interfaceMapper,
         IntegrationFieldMappingMapper mappingMapper,
         IntegrationLogMapper logMapper,
-        UserContext userContext
+        UserContext userContext,
+        SapJcoService sapJcoService
     ) {
         this.connectionMapper = connectionMapper;
         this.sapRfcConfigMapper = sapRfcConfigMapper;
@@ -83,6 +76,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         this.mappingMapper = mappingMapper;
         this.logMapper = logMapper;
         this.userContext = userContext;
+        this.sapJcoService = sapJcoService;
     }
 
     @Override
@@ -206,7 +200,11 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             || !StringUtils.hasText(cfg.getClient()) || !StringUtils.hasText(cfg.getUserName())) {
             throw new BizException(1001, "SAP RFC连接参数不完整");
         }
-        return "SAP RFC配置参数校验通过，真实连通性将在接入SAP JCo执行器后验证";
+        try {
+            return sapJcoService.testConnection(cfg);
+        } catch (IllegalStateException ex) {
+            throw new BizException(1001, ex.getMessage());
+        }
     }
 
     @Override
@@ -498,167 +496,13 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if (!StringUtils.hasText(iface.getSapFunctionName())) {
             return ExecuteResult.failed("接口定义缺少SAP RFC/BAPI函数名", false);
         }
-        try {
-            Class.forName("com.sap.conn.jco.JCoDestinationManager");
-        } catch (ClassNotFoundException ex) {
-            return ExecuteResult.failed("当前运行环境未安装SAP JCo执行器，无法真实推送SAP RFC。请将sapjco3.jar和本机库加入customer服务运行时classpath，或改用SAP OData/HTTP网关接口。", false);
-        }
-        try {
-            Object function = prepareSapFunction(cfg, iface);
-            applySapMappings(function, iface, log);
-            Object destination = getSapDestination(cfg);
-            function.getClass().getMethod("execute", Class.forName("com.sap.conn.jco.JCoDestination")).invoke(function, destination);
-            Object response = invokeNoArg(function, "toXML");
-            return ExecuteResult.success(response == null ? "SAP RFC执行成功" : String.valueOf(response));
-        } catch (Exception ex) {
-            return ExecuteResult.failed("SAP RFC执行异常：" + rootMessage(ex), true);
-        }
-    }
-
-    private Object prepareSapFunction(SapRfcConfig cfg, IntegrationInterface iface) throws Exception {
-        Object destination = getSapDestination(cfg);
-        Object repository = invokeNoArg(destination, "getRepository");
-        Object function = repository.getClass().getMethod("getFunction", String.class).invoke(repository, iface.getSapFunctionName());
-        if (function == null) {
-            throw new IllegalStateException("SAP函数不存在：" + iface.getSapFunctionName());
-        }
-        return function;
-    }
-
-    private Object getSapDestination(SapRfcConfig cfg) throws Exception {
-        registerJcoProviderIfNecessary();
-        String destinationName = "HUAFU_CRM_" + cfg.getConfigCode();
-        JCO_DESTINATION_PROPS.put(destinationName, buildJcoProperties(cfg));
-        Class<?> managerClass = Class.forName("com.sap.conn.jco.JCoDestinationManager");
-        return managerClass.getMethod("getDestination", String.class).invoke(null, destinationName);
-    }
-
-    private void registerJcoProviderIfNecessary() throws Exception {
-        if (jcoProviderRegistered) return;
-        synchronized (IntegrationPlatformServiceImpl.class) {
-            if (jcoProviderRegistered) return;
-            Class<?> providerInterface = Class.forName("com.sap.conn.jco.ext.DestinationDataProvider");
-            Object provider = Proxy.newProxyInstance(
-                providerInterface.getClassLoader(),
-                new Class<?>[] { providerInterface },
-                new JcoDestinationProviderInvocationHandler());
-            Class<?> environmentClass = Class.forName("com.sap.conn.jco.ext.Environment");
-            Boolean registered = (Boolean) environmentClass.getMethod("isDestinationDataProviderRegistered").invoke(null);
-            if (!registered) {
-                environmentClass.getMethod("registerDestinationDataProvider", providerInterface).invoke(null, provider);
-            }
-            jcoProviderRegistered = true;
-        }
-    }
-
-    private Properties buildJcoProperties(SapRfcConfig cfg) {
-        Properties props = new Properties();
-        props.setProperty("jco.client.ashost", cfg.getAppServerHost());
-        props.setProperty("jco.client.sysnr", cfg.getSystemNumber());
-        props.setProperty("jco.client.client", cfg.getClient());
-        props.setProperty("jco.client.user", cfg.getUserName());
-        props.setProperty("jco.client.passwd", cfg.getPasswordCipher());
-        props.setProperty("jco.client.lang", StringUtils.hasText(cfg.getLanguage()) ? cfg.getLanguage() : "ZH");
-        props.setProperty("jco.destination.pool_capacity", String.valueOf(cfg.getPoolCapacity() == null ? 5 : cfg.getPoolCapacity()));
-        props.setProperty("jco.destination.peak_limit", String.valueOf(cfg.getPeakLimit() == null ? 10 : cfg.getPeakLimit()));
-        return props;
-    }
-
-    private void applySapMappings(Object function, IntegrationInterface iface, IntegrationLog log) throws Exception {
-        JsonNode root = StringUtils.hasText(log.getRequestPayload()) ? OBJECT_MAPPER.readTree(log.getRequestPayload()) : OBJECT_MAPPER.createObjectNode();
         List<IntegrationFieldMapping> mappings = listMappings(iface.getId()).stream()
             .filter(mapping -> "OUTBOUND".equals(mapping.getMappingDirection()) || "BIDIRECTIONAL".equals(mapping.getMappingDirection()))
             .toList();
-        for (IntegrationFieldMapping mapping : mappings) {
-            if ("TABLE".equals(mapping.getParameterMode())) {
-                applySapTableMapping(function, mapping, root);
-            } else {
-                Object value = resolveMappingValue(root, mapping.getSourceField(), mapping.getDefaultValue(), 0);
-                if (value != null && StringUtils.hasText(mapping.getTargetField())) {
-                    setSapParameter(function, mapping.getTargetField(), value);
-                }
-            }
-        }
-    }
-
-    private void applySapTableMapping(Object function, IntegrationFieldMapping mapping, JsonNode root) throws Exception {
-        if (!StringUtils.hasText(mapping.getParameterGroup()) || !StringUtils.hasText(mapping.getTableFieldMappings())) return;
-        Object tableList = invokeNoArg(function, "getTableParameterList");
-        if (tableList == null) throw new IllegalStateException("SAP函数没有TABLE参数列表：" + mapping.getParameterGroup());
-        Object table = tableList.getClass().getMethod("getTable", String.class).invoke(tableList, mapping.getParameterGroup());
-        if (table == null) throw new IllegalStateException("SAP TABLE参数不存在：" + mapping.getParameterGroup());
-        List<Map<String, Object>> rows = OBJECT_MAPPER.readValue(mapping.getTableFieldMappings(), TABLE_FIELD_LIST_TYPE);
-        int rowCount = Math.max(1, inferTableRowCount(root, rows));
-        for (int i = 0; i < rowCount; i++) {
-            table.getClass().getMethod("appendRow").invoke(table);
-            for (Map<String, Object> row : rows) {
-                String targetField = stringValue(row.get("targetField"));
-                if (!StringUtils.hasText(targetField)) continue;
-                Object value = resolveMappingValue(root, stringValue(row.get("sourceField")), stringValue(row.get("defaultValue")), i);
-                if (value != null) {
-                    table.getClass().getMethod("setValue", String.class, Object.class).invoke(table, targetField, value);
-                }
-            }
-        }
-    }
-
-    private int inferTableRowCount(JsonNode root, List<Map<String, Object>> rows) {
-        int count = 0;
-        for (Map<String, Object> row : rows) {
-            String path = stringValue(row.get("sourceField"));
-            int arrayMarker = path == null ? -1 : path.indexOf("[].");
-            if (arrayMarker <= 0) continue;
-            JsonNode array = root.path(path.substring(0, arrayMarker));
-            if (array.isArray()) count = Math.max(count, array.size());
-        }
-        return count;
-    }
-
-    private void setSapParameter(Object function, String targetField, Object value) throws Exception {
-        Object importList = invokeNoArg(function, "getImportParameterList");
-        if (importList != null) {
-            importList.getClass().getMethod("setValue", String.class, Object.class).invoke(importList, targetField, value);
-            return;
-        }
-        Object changingList = invokeNoArg(function, "getChangingParameterList");
-        if (changingList != null) {
-            changingList.getClass().getMethod("setValue", String.class, Object.class).invoke(changingList, targetField, value);
-        }
-    }
-
-    private Object resolveMappingValue(JsonNode root, String sourceField, String defaultValue, int rowIndex) {
-        if (!StringUtils.hasText(sourceField)) {
-            return StringUtils.hasText(defaultValue) ? defaultValue : null;
-        }
-        JsonNode node = resolveJsonPath(root, sourceField, rowIndex);
-        if (node == null || node.isMissingNode() || node.isNull()) {
-            return StringUtils.hasText(defaultValue) ? defaultValue : null;
-        }
-        if (node.isNumber()) return node.numberValue();
-        if (node.isBoolean()) return node.booleanValue();
-        return node.asText();
-    }
-
-    private JsonNode resolveJsonPath(JsonNode root, String sourceField, int rowIndex) {
-        String normalized = sourceField;
-        if (sourceField.startsWith("customerSapInfo.") || sourceField.startsWith("sapInfo.")) {
-            normalized = "sapInfo." + sourceField.substring(sourceField.indexOf('.') + 1);
-        } else if (sourceField.startsWith("customerSapOrg.")) {
-            normalized = "sapOrgs[]." + sourceField.substring(sourceField.indexOf('.') + 1);
-        }
-        JsonNode node = root;
-        for (String part : normalized.split("\\.")) {
-            if (!StringUtils.hasText(part)) continue;
-            if (part.endsWith("[]")) {
-                String arrayName = part.substring(0, part.length() - 2);
-                node = node.path(arrayName);
-                if (!node.isArray()) return null;
-                node = node.path(Math.min(rowIndex, Math.max(0, node.size() - 1)));
-            } else {
-                node = node.path(part);
-            }
-        }
-        return node;
+        SapJcoResult result = sapJcoService.execute(cfg, iface, log, mappings);
+        return result.success()
+            ? ExecuteResult.success(result.responsePayload())
+            : ExecuteResult.failed(result.errorMessage(), result.retryable());
     }
 
     private IntegrationInterface findEnabledInterface(String interfaceCode) {
@@ -731,17 +575,6 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         }
     }
 
-    private Object invokeNoArg(Object target, String methodName) throws Exception {
-        Method method = target.getClass().getMethod(methodName);
-        return method.invoke(target);
-    }
-
-    private String rootMessage(Exception ex) {
-        Throwable current = ex;
-        while (current.getCause() != null) current = current.getCause();
-        return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
-    }
-
     private String stringValue(Object value) {
         return value == null ? null : String.valueOf(value);
     }
@@ -755,18 +588,6 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         }
         static ExecuteResult failed(String errorMessage, String responsePayload, boolean retryable) {
             return new ExecuteResult(false, responsePayload, errorMessage, retryable);
-        }
-    }
-
-    private static class JcoDestinationProviderInvocationHandler implements InvocationHandler {
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) {
-            return switch (method.getName()) {
-                case "getDestinationProperties" -> JCO_DESTINATION_PROPS.get(String.valueOf(args[0]));
-                case "supportsEvents" -> false;
-                case "setDestinationDataEventListener" -> null;
-                default -> null;
-            };
         }
     }
 

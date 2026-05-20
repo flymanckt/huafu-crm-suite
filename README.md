@@ -39,7 +39,25 @@ huafu-crm-suite/
 - 映射可配置参数组/表名、映射方向、CRM 模块、CRM 字段、接口字段、字段类型、必填、默认值和转换规则。
 - CRM 字段来源覆盖客户主数据和现有通用业务模块，例如产品档案、订单、发货、样品、展会、日报等。
 - 客户详情的 SAP 信息保存会自动生成 `SAP_CUS` 待推送日志；SAP 编号允许先为空，可由 SAP 回传接口回填。
-- 集成平台会自动消费 `PENDING/RETRYING` 日志，HTTP 类接口可直接推送；SAP RFC 需要在 customer 服务运行时安装 `sapjco3.jar` 和对应本机库，否则日志会明确失败并提示缺少 JCo 执行器。
+- 集成平台会自动消费 `PENDING/RETRYING` 日志，HTTP 类接口可直接推送；SAP RFC 已接入独立的 SAP JCo 服务，运行时缺少 JCo 库时日志会明确失败并提示处理方式。
+
+## SAP JCo 运行库
+
+SAP RFC 执行依赖 SAP 官方 JCo 运行库。仓库不会提交 `sapjco3.jar` 和本机库，需要在部署环境补充：
+
+```bash
+cp sapjco3.jar backend/lib/
+cp libsapjco3.so backend/lib/
+SERVICES=customer scripts/start-services.sh
+```
+
+如 JCo 文件不放在 `backend/lib`，可通过环境变量指定：
+
+```bash
+SAP_JCO_LIB_DIR=/opt/sapjco SAP_JCO_NATIVE_DIR=/opt/sapjco SERVICES=customer scripts/start-services.sh
+```
+
+启动脚本检测到 `sapjco3.jar` 后，会自动为 `huafu-crm-customer` 加载外部 classpath 和 `java.library.path`。
 
 ## 快速构建
 
