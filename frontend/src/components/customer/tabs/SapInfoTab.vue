@@ -23,7 +23,8 @@
       <el-table-column prop="accountGroup" label="账户组" width="120">
         <template #default="{ row }">
           <DictSelect v-if="row._editing" v-model="row.accountGroup" dict-code="sap_account_group" size="small" style="width:100%" />
-          <span v-else>{{ row.accountGroup }}</span>
+          <DictTag v-else-if="row.accountGroup" dict-code="sap_account_group" :value="String(row.accountGroup)" size="small" />
+          <span v-else>-</span>
         </template>
       </el-table-column>
       <el-table-column prop="countryCode" label="国家代码" width="100">
@@ -53,12 +54,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createSapInfoV1, deleteSapInfoV1, getSapInfoListV1, updateSapInfoV1 } from '@/api/customer'
 import DictSelect from '@/components/Dict/DictSelect.vue'
+import DictTag from '@/components/Dict/DictTag.vue'
+import { useDict } from '@/composables/useDict'
 
 const props = defineProps({ customerId: { type: [String, Number], required: true } })
 const tableData = ref([])
 const saving = ref(false)
 const editingRow = ref(null)
 const hasEditingRow = computed(() => tableData.value.some(row => row._editing))
+const { loadDictItems } = useDict()
 
 const loadData = async () => {
   if (!props.customerId) return
@@ -122,7 +126,10 @@ const handleDelete = async (row) => {
   ElMessage.success('删除成功')
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadDictItems(['sap_account_group'])
+  loadData()
+})
 watch(() => props.customerId, loadData)
 </script>
 
