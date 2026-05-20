@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huafu.crm.ai.model.DailyReportAiResult;
 import com.huafu.crm.common.exception.BizException;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.net.SocketTimeoutException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -25,6 +27,8 @@ import java.util.Objects;
 
 @Component
 public class ConfiguredAiClient implements AiClient {
+    private static final int DEFAULT_AI_TIMEOUT_MS = 120_000;
+    private static final int DEFAULT_AI_CONNECT_TIMEOUT_MS = 30_000;
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -43,6 +47,7 @@ public class ConfiguredAiClient implements AiClient {
         String baseUrl = config("ai.base_url");
         String model = config("ai.model");
         String protocol = config("ai.protocol");
+        int timeoutMs = intConfig("ai.timeout_ms", DEFAULT_AI_TIMEOUT_MS);
         if (blank(apiKey) || blank(baseUrl) || blank(model)) {
             throw new BizException(1001, "请先在系统管理-外围系统配置-AI服务中配置 ai.api_key、ai.base_url、ai.model");
         }
@@ -53,15 +58,15 @@ public class ConfiguredAiClient implements AiClient {
         }
 
         String answer = "ANTHROPIC_MESSAGES".equalsIgnoreCase(protocol)
-                ? requestAnthropicMessage(messagesUrl(baseUrl), apiKey, model, content)
-                : requestChatCompletion(chatCompletionUrl(baseUrl), apiKey, model, content);
+                ? requestAnthropicMessage(messagesUrl(baseUrl), apiKey, model, content, timeoutMs)
+                : requestChatCompletion(chatCompletionUrl(baseUrl), apiKey, model, content, timeoutMs);
         Map<String, Object> parsed = parseAnswer(answer);
         enrichWithMasterData(parsed);
         persistParsedDailyReport(content, parsed);
         return toResult(content, parsed);
     }
 
-    private String requestChatCompletion(String url, String apiKey, String model, String text) {
+    private String requestChatCompletion(String url, String apiKey, String model, String text, int timeoutMs) {
         try {
             Map<String, Object> request = Map.of(
                     "model", model,
@@ -71,7 +76,7 @@ public class ConfiguredAiClient implements AiClient {
                             Map.of("role", "user", "content", text)
                     )
             );
-            String raw = restClientBuilder.build()
+            String raw = restClient(timeoutMs)
                     .post()
                     .uri(url)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -86,11 +91,11 @@ public class ConfiguredAiClient implements AiClient {
             }
             return answer;
         } catch (Exception ex) {
-            throw new BizException(1001, "AI解析调用失败：" + ex.getMessage());
+            throw new BizException(1001, "AI解析调用失败：" + aiCallErrorMessage(ex, timeoutMs));
         }
     }
 
-    private String requestAnthropicMessage(String url, String apiKey, String model, String text) {
+    private String requestAnthropicMessage(String url, String apiKey, String model, String text, int timeoutMs) {
         try {
             Map<String, Object> request = Map.of(
                     "model", model,
@@ -99,7 +104,7 @@ public class ConfiguredAiClient implements AiClient {
                     "system", systemPrompt(),
                     "messages", List.of(Map.of("role", "user", "content", text))
             );
-            String raw = restClientBuilder.build()
+            String raw = restClient(timeoutMs)
                     .post()
                     .uri(url)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -115,8 +120,35 @@ public class ConfiguredAiClient implements AiClient {
             }
             return answer;
         } catch (Exception ex) {
-            throw new BizException(1001, "AI解析调用失败：" + ex.getMessage());
+            throw new BizException(1001, "AI解析调用失败：" + aiCallErrorMessage(ex, timeoutMs));
         }
+    }
+
+    private RestClient restClient(int timeoutMs) {
+        int readTimeout = positiveOrDefault(timeoutMs, DEFAULT_AI_TIMEOUT_MS);
+        int connectTimeout = Math.min(readTimeout, DEFAULT_AI_CONNECT_TIMEOUT_MS);
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeout);
+        factory.setReadTimeout(readTimeout);
+        return restClientBuilder.clone()
+                .requestFactory(factory)
+                .build();
+    }
+
+    private String aiCallErrorMessage(Exception ex, int timeoutMs) {
+        Throwable root = rootCause(ex);
+        if (root instanceof SocketTimeoutException || String.valueOf(root.getMessage()).toLowerCase().contains("timed out")) {
+            return "调用AI服务超时，当前超时时间为 " + timeoutMs + "ms，可在外围系统配置中调整 ai.timeout_ms";
+        }
+        return ex.getMessage();
+    }
+
+    private Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private Map<String, Object> parseAnswer(String answer) {
@@ -408,7 +440,7 @@ public class ConfiguredAiClient implements AiClient {
     private Match<CustomerCandidate> bestCustomer(String keyword, List<CustomerCandidate> customers) {
         Match<CustomerCandidate> best = null;
         for (CustomerCandidate customer : customers) {
-            int score = maxScore(keyword, customer.name(), customer.shortName(), customer.englishName(), customer.code(), customer.sapCode());
+            int score = maxCustomerScore(keyword, customer.name(), customer.shortName(), customer.englishName(), customer.code(), customer.sapCode());
             if (score >= 60 && (best == null || score > best.score())) best = new Match<>(customer, score);
         }
         return best;
@@ -429,6 +461,27 @@ public class ConfiguredAiClient implements AiClient {
         return max;
     }
 
+    private int maxCustomerScore(String keyword, String... aliases) {
+        int max = 0;
+        for (String alias : aliases) max = Math.max(max, customerScore(keyword, alias));
+        return max;
+    }
+
+    private int customerScore(String raw, String alias) {
+        String left = normalize(raw);
+        String right = normalize(alias);
+        if (left.isEmpty() || right.isEmpty()) return 0;
+        if (left.equals(right)) return 100;
+        if (left.contains(right) || right.contains(left)) return Math.min(left.length(), right.length()) >= 3 ? 88 : 70;
+
+        String leftCore = normalizeCustomerCore(raw);
+        String rightCore = normalizeCustomerCore(alias);
+        if (leftCore.isEmpty() || rightCore.isEmpty()) return 0;
+        if (leftCore.equals(rightCore)) return 96;
+        if (leftCore.contains(rightCore) || rightCore.contains(leftCore)) return Math.min(leftCore.length(), rightCore.length()) >= 2 ? 86 : 0;
+        return score(leftCore, rightCore);
+    }
+
     private int score(String raw, String alias) {
         String left = normalize(raw);
         String right = normalize(alias);
@@ -446,6 +499,23 @@ public class ConfiguredAiClient implements AiClient {
             }
         }
         return (int) Math.round(common * 100.0 / Math.max(left.length(), right.length()));
+    }
+
+    private String normalizeCustomerCore(String value) {
+        return normalize(value)
+                .replace("股份有限公司", "")
+                .replace("有限责任公司", "")
+                .replace("有限公司", "")
+                .replace("集团公司", "")
+                .replace("集团", "")
+                .replace("公司", "")
+                .replace("纺织", "")
+                .replace("服饰", "")
+                .replace("服装", "")
+                .replace("贸易", "")
+                .replace("科技", "")
+                .replace("实业", "")
+                .replace("国际", "");
     }
 
     private String normalize(String value) {
@@ -567,6 +637,20 @@ public class ConfiguredAiClient implements AiClient {
                 (rs, rowNum) -> rs.getString(1),
                 key);
         return values.isEmpty() ? "" : values.get(0);
+    }
+
+    private int intConfig(String key, int fallback) {
+        String value = config(key);
+        if (blank(value)) return fallback;
+        try {
+            return positiveOrDefault(Integer.parseInt(value.trim()), fallback);
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    private int positiveOrDefault(int value, int fallback) {
+        return value > 0 ? value : fallback;
     }
 
     private String chatCompletionUrl(String baseUrl) {
