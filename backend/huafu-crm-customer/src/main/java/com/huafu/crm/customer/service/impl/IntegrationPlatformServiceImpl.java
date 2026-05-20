@@ -1,8 +1,10 @@
 package com.huafu.crm.customer.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huafu.crm.common.api.PageResult;
 import com.huafu.crm.common.context.UserContext;
@@ -24,10 +26,25 @@ import com.huafu.crm.customer.mapper.IntegrationInterfaceMapper;
 import com.huafu.crm.customer.mapper.IntegrationLogMapper;
 import com.huafu.crm.customer.mapper.SapRfcConfigMapper;
 import com.huafu.crm.customer.service.IntegrationPlatformService;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,6 +57,10 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private static final Set<String> GENERIC_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SFTP", "FTP", "DATABASE", "KAFKA", "RABBITMQ", "CUSTOM");
     private static final Set<String> PARAMETER_MODES = Set.of("SINGLE", "TABLE");
     private static final Set<String> MAPPING_DIRECTIONS = Set.of("OUTBOUND", "INBOUND", "BIDIRECTIONAL");
+    private static final Set<String> HTTP_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SAP_ODATA");
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final Map<String, Properties> JCO_DESTINATION_PROPS = new ConcurrentHashMap<>();
+    private static volatile boolean jcoProviderRegistered = false;
 
     private final IntegrationConnectionConfigMapper connectionMapper;
     private final SapRfcConfigMapper sapRfcConfigMapper;
@@ -334,14 +355,419 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     @Transactional
     public IntegrationLog repushLog(Long id) {
         IntegrationLog log = requireLog(id);
-        log.setStatus("PENDING");
-        log.setRetryCount((log.getRetryCount() == null ? 0 : log.getRetryCount()) + 1);
-        log.setNextRetryTime(LocalDateTime.now());
-        log.setErrorMessage(null);
-        log.setUpdatedBy(currentUserId());
-        log.setUpdatedTime(LocalDateTime.now());
-        logMapper.updateById(log);
+        logMapper.update(null, new LambdaUpdateWrapper<IntegrationLog>()
+            .eq(IntegrationLog::getId, id)
+            .set(IntegrationLog::getStatus, "PENDING")
+            .set(IntegrationLog::getRetryCount, (log.getRetryCount() == null ? 0 : log.getRetryCount()) + 1)
+            .set(IntegrationLog::getNextRetryTime, LocalDateTime.now())
+            .set(IntegrationLog::getErrorMessage, null)
+            .set(IntegrationLog::getUpdatedBy, currentUserId())
+            .set(IntegrationLog::getUpdatedTime, LocalDateTime.now()));
+        return executeLog(id);
+    }
+
+    @Override
+    public IntegrationLog executeLog(Long id) {
+        IntegrationLog log = requireLog(id);
+        if ("SUCCESS".equals(log.getStatus())) {
+            return log;
+        }
+        markRunning(log);
+        ExecuteResult result;
+        try {
+            result = executeOutbound(log);
+        } catch (Exception ex) {
+            result = ExecuteResult.failed(ex.getMessage(), true);
+        }
+        return finishExecution(id, result);
+    }
+
+    @Override
+    public int executePendingLogs(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        List<IntegrationLog> pendingLogs = logMapper.selectList(new LambdaQueryWrapper<IntegrationLog>()
+            .eq(IntegrationLog::getDeleted, (short) 0)
+            .in(IntegrationLog::getStatus, List.of("PENDING", "RETRYING"))
+            .and(w -> w.isNull(IntegrationLog::getNextRetryTime).or().le(IntegrationLog::getNextRetryTime, LocalDateTime.now()))
+            .orderByAsc(IntegrationLog::getCreatedTime)
+            .last("LIMIT " + safeLimit));
+        int executed = 0;
+        for (IntegrationLog log : pendingLogs) {
+            try {
+                executeLog(log.getId());
+                executed++;
+            } catch (Exception ignored) {
+                // Individual failures are recorded on the integration log.
+            }
+        }
+        return executed;
+    }
+
+    private void markRunning(IntegrationLog log) {
+        logMapper.update(null, new LambdaUpdateWrapper<IntegrationLog>()
+            .eq(IntegrationLog::getId, log.getId())
+            .set(IntegrationLog::getStatus, "RUNNING")
+            .set(IntegrationLog::getErrorMessage, null)
+            .set(IntegrationLog::getUpdatedBy, currentUserId())
+            .set(IntegrationLog::getUpdatedTime, LocalDateTime.now()));
+    }
+
+    private IntegrationLog finishExecution(Long id, ExecuteResult result) {
+        IntegrationLog log = requireLog(id);
+        IntegrationInterface iface = findEnabledInterface(log.getInterfaceCode());
+        boolean canRetry = result.retryable()
+            && iface != null
+            && (log.getRetryCount() == null ? 0 : log.getRetryCount()) < (iface.getRetryLimit() == null ? 3 : iface.getRetryLimit());
+        LambdaUpdateWrapper<IntegrationLog> wrapper = new LambdaUpdateWrapper<IntegrationLog>()
+            .eq(IntegrationLog::getId, id)
+            .set(IntegrationLog::getUpdatedBy, currentUserId())
+            .set(IntegrationLog::getUpdatedTime, LocalDateTime.now());
+        if (result.success()) {
+            wrapper.set(IntegrationLog::getStatus, "SUCCESS")
+                .set(IntegrationLog::getResponsePayload, result.responsePayload())
+                .set(IntegrationLog::getErrorMessage, null)
+                .set(IntegrationLog::getNextRetryTime, null)
+                .set(IntegrationLog::getPushedTime, LocalDateTime.now());
+        } else {
+            wrapper.set(IntegrationLog::getStatus, canRetry ? "RETRYING" : "FAILED")
+                .set(IntegrationLog::getResponsePayload, result.responsePayload())
+                .set(IntegrationLog::getErrorMessage, result.errorMessage())
+                .set(IntegrationLog::getNextRetryTime, canRetry ? LocalDateTime.now().plusMinutes(1) : null);
+        }
+        logMapper.update(null, wrapper);
         return requireLog(id);
+    }
+
+    private ExecuteResult executeOutbound(IntegrationLog log) {
+        IntegrationInterface iface = findEnabledInterface(log.getInterfaceCode());
+        if (iface == null) {
+            return ExecuteResult.failed("接口定义不存在或未启用：" + log.getInterfaceCode(), false);
+        }
+        String protocol = iface.getProtocol();
+        if (HTTP_PROTOCOLS.contains(protocol)) {
+            return executeHttp(iface, log);
+        }
+        if ("SAP_RFC".equals(protocol)) {
+            return executeSapRfc(iface, log);
+        }
+        return ExecuteResult.failed("接口协议暂未接入执行器：" + protocol, false);
+    }
+
+    private ExecuteResult executeHttp(IntegrationInterface iface, IntegrationLog log) {
+        IntegrationConnectionConfig connection = findConnection(iface.getConnectionCode());
+        if (connection == null) {
+            return ExecuteResult.failed("连接配置不存在或未启用：" + iface.getConnectionCode(), false);
+        }
+        if (!StringUtils.hasText(connection.getBaseUrl())) {
+            return ExecuteResult.failed("连接配置缺少Base URL：" + connection.getConnectionCode(), false);
+        }
+        try {
+            String method = StringUtils.hasText(iface.getHttpMethod()) ? iface.getHttpMethod().toUpperCase() : "POST";
+            String contentType = StringUtils.hasText(iface.getContentType()) ? iface.getContentType() : "application/json";
+            String url = joinUrl(connection.getBaseUrl(), iface.getEndpointPath());
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofMillis(connection.getTimeoutMs() == null ? 30000 : connection.getTimeoutMs()))
+                .header("Content-Type", contentType);
+            applyHeaders(builder, connection.getHeaderConfig());
+            applyAuth(builder, connection);
+            if ("GET".equals(method)) {
+                builder.GET();
+            } else {
+                builder.method(method, HttpRequest.BodyPublishers.ofString(log.getRequestPayload() == null ? "" : log.getRequestPayload(), StandardCharsets.UTF_8));
+            }
+            HttpResponse<String> response = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(connection.getTimeoutMs() == null ? 30000 : connection.getTimeoutMs()))
+                .build()
+                .send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            boolean ok = response.statusCode() >= 200 && response.statusCode() < 300;
+            String responsePayload = toJson(Map.of("statusCode", response.statusCode(), "body", response.body()));
+            return ok
+                ? ExecuteResult.success(responsePayload)
+                : ExecuteResult.failed("HTTP调用失败，状态码：" + response.statusCode(), responsePayload, response.statusCode() >= 500);
+        } catch (Exception ex) {
+            return ExecuteResult.failed("HTTP调用异常：" + ex.getMessage(), true);
+        }
+    }
+
+    private ExecuteResult executeSapRfc(IntegrationInterface iface, IntegrationLog log) {
+        SapRfcConfig cfg = findSapConfig(iface.getConnectionCode());
+        if (cfg == null) {
+            return ExecuteResult.failed("SAP RFC配置不存在或未启用：" + iface.getConnectionCode(), false);
+        }
+        if (!StringUtils.hasText(iface.getSapFunctionName())) {
+            return ExecuteResult.failed("接口定义缺少SAP RFC/BAPI函数名", false);
+        }
+        try {
+            Class.forName("com.sap.conn.jco.JCoDestinationManager");
+        } catch (ClassNotFoundException ex) {
+            return ExecuteResult.failed("当前运行环境未安装SAP JCo执行器，无法真实推送SAP RFC。请将sapjco3.jar和本机库加入customer服务运行时classpath，或改用SAP OData/HTTP网关接口。", false);
+        }
+        try {
+            Object function = prepareSapFunction(cfg, iface);
+            applySapMappings(function, iface, log);
+            Object destination = getSapDestination(cfg);
+            function.getClass().getMethod("execute", Class.forName("com.sap.conn.jco.JCoDestination")).invoke(function, destination);
+            Object response = invokeNoArg(function, "toXML");
+            return ExecuteResult.success(response == null ? "SAP RFC执行成功" : String.valueOf(response));
+        } catch (Exception ex) {
+            return ExecuteResult.failed("SAP RFC执行异常：" + rootMessage(ex), true);
+        }
+    }
+
+    private Object prepareSapFunction(SapRfcConfig cfg, IntegrationInterface iface) throws Exception {
+        Object destination = getSapDestination(cfg);
+        Object repository = invokeNoArg(destination, "getRepository");
+        Object function = repository.getClass().getMethod("getFunction", String.class).invoke(repository, iface.getSapFunctionName());
+        if (function == null) {
+            throw new IllegalStateException("SAP函数不存在：" + iface.getSapFunctionName());
+        }
+        return function;
+    }
+
+    private Object getSapDestination(SapRfcConfig cfg) throws Exception {
+        registerJcoProviderIfNecessary();
+        String destinationName = "HUAFU_CRM_" + cfg.getConfigCode();
+        JCO_DESTINATION_PROPS.put(destinationName, buildJcoProperties(cfg));
+        Class<?> managerClass = Class.forName("com.sap.conn.jco.JCoDestinationManager");
+        return managerClass.getMethod("getDestination", String.class).invoke(null, destinationName);
+    }
+
+    private void registerJcoProviderIfNecessary() throws Exception {
+        if (jcoProviderRegistered) return;
+        synchronized (IntegrationPlatformServiceImpl.class) {
+            if (jcoProviderRegistered) return;
+            Class<?> providerInterface = Class.forName("com.sap.conn.jco.ext.DestinationDataProvider");
+            Object provider = Proxy.newProxyInstance(
+                providerInterface.getClassLoader(),
+                new Class<?>[] { providerInterface },
+                new JcoDestinationProviderInvocationHandler());
+            Class<?> environmentClass = Class.forName("com.sap.conn.jco.ext.Environment");
+            Boolean registered = (Boolean) environmentClass.getMethod("isDestinationDataProviderRegistered").invoke(null);
+            if (!registered) {
+                environmentClass.getMethod("registerDestinationDataProvider", providerInterface).invoke(null, provider);
+            }
+            jcoProviderRegistered = true;
+        }
+    }
+
+    private Properties buildJcoProperties(SapRfcConfig cfg) {
+        Properties props = new Properties();
+        props.setProperty("jco.client.ashost", cfg.getAppServerHost());
+        props.setProperty("jco.client.sysnr", cfg.getSystemNumber());
+        props.setProperty("jco.client.client", cfg.getClient());
+        props.setProperty("jco.client.user", cfg.getUserName());
+        props.setProperty("jco.client.passwd", cfg.getPasswordCipher());
+        props.setProperty("jco.client.lang", StringUtils.hasText(cfg.getLanguage()) ? cfg.getLanguage() : "ZH");
+        props.setProperty("jco.destination.pool_capacity", String.valueOf(cfg.getPoolCapacity() == null ? 5 : cfg.getPoolCapacity()));
+        props.setProperty("jco.destination.peak_limit", String.valueOf(cfg.getPeakLimit() == null ? 10 : cfg.getPeakLimit()));
+        return props;
+    }
+
+    private void applySapMappings(Object function, IntegrationInterface iface, IntegrationLog log) throws Exception {
+        JsonNode root = StringUtils.hasText(log.getRequestPayload()) ? OBJECT_MAPPER.readTree(log.getRequestPayload()) : OBJECT_MAPPER.createObjectNode();
+        List<IntegrationFieldMapping> mappings = listMappings(iface.getId()).stream()
+            .filter(mapping -> "OUTBOUND".equals(mapping.getMappingDirection()) || "BIDIRECTIONAL".equals(mapping.getMappingDirection()))
+            .toList();
+        for (IntegrationFieldMapping mapping : mappings) {
+            if ("TABLE".equals(mapping.getParameterMode())) {
+                applySapTableMapping(function, mapping, root);
+            } else {
+                Object value = resolveMappingValue(root, mapping.getSourceField(), mapping.getDefaultValue(), 0);
+                if (value != null && StringUtils.hasText(mapping.getTargetField())) {
+                    setSapParameter(function, mapping.getTargetField(), value);
+                }
+            }
+        }
+    }
+
+    private void applySapTableMapping(Object function, IntegrationFieldMapping mapping, JsonNode root) throws Exception {
+        if (!StringUtils.hasText(mapping.getParameterGroup()) || !StringUtils.hasText(mapping.getTableFieldMappings())) return;
+        Object tableList = invokeNoArg(function, "getTableParameterList");
+        if (tableList == null) throw new IllegalStateException("SAP函数没有TABLE参数列表：" + mapping.getParameterGroup());
+        Object table = tableList.getClass().getMethod("getTable", String.class).invoke(tableList, mapping.getParameterGroup());
+        if (table == null) throw new IllegalStateException("SAP TABLE参数不存在：" + mapping.getParameterGroup());
+        List<Map<String, Object>> rows = OBJECT_MAPPER.readValue(mapping.getTableFieldMappings(), TABLE_FIELD_LIST_TYPE);
+        int rowCount = Math.max(1, inferTableRowCount(root, rows));
+        for (int i = 0; i < rowCount; i++) {
+            table.getClass().getMethod("appendRow").invoke(table);
+            for (Map<String, Object> row : rows) {
+                String targetField = stringValue(row.get("targetField"));
+                if (!StringUtils.hasText(targetField)) continue;
+                Object value = resolveMappingValue(root, stringValue(row.get("sourceField")), stringValue(row.get("defaultValue")), i);
+                if (value != null) {
+                    table.getClass().getMethod("setValue", String.class, Object.class).invoke(table, targetField, value);
+                }
+            }
+        }
+    }
+
+    private int inferTableRowCount(JsonNode root, List<Map<String, Object>> rows) {
+        int count = 0;
+        for (Map<String, Object> row : rows) {
+            String path = stringValue(row.get("sourceField"));
+            int arrayMarker = path == null ? -1 : path.indexOf("[].");
+            if (arrayMarker <= 0) continue;
+            JsonNode array = root.path(path.substring(0, arrayMarker));
+            if (array.isArray()) count = Math.max(count, array.size());
+        }
+        return count;
+    }
+
+    private void setSapParameter(Object function, String targetField, Object value) throws Exception {
+        Object importList = invokeNoArg(function, "getImportParameterList");
+        if (importList != null) {
+            importList.getClass().getMethod("setValue", String.class, Object.class).invoke(importList, targetField, value);
+            return;
+        }
+        Object changingList = invokeNoArg(function, "getChangingParameterList");
+        if (changingList != null) {
+            changingList.getClass().getMethod("setValue", String.class, Object.class).invoke(changingList, targetField, value);
+        }
+    }
+
+    private Object resolveMappingValue(JsonNode root, String sourceField, String defaultValue, int rowIndex) {
+        if (!StringUtils.hasText(sourceField)) {
+            return StringUtils.hasText(defaultValue) ? defaultValue : null;
+        }
+        JsonNode node = resolveJsonPath(root, sourceField, rowIndex);
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return StringUtils.hasText(defaultValue) ? defaultValue : null;
+        }
+        if (node.isNumber()) return node.numberValue();
+        if (node.isBoolean()) return node.booleanValue();
+        return node.asText();
+    }
+
+    private JsonNode resolveJsonPath(JsonNode root, String sourceField, int rowIndex) {
+        String normalized = sourceField;
+        if (sourceField.startsWith("customerSapInfo.") || sourceField.startsWith("sapInfo.")) {
+            normalized = "sapInfo." + sourceField.substring(sourceField.indexOf('.') + 1);
+        } else if (sourceField.startsWith("customerSapOrg.")) {
+            normalized = "sapOrgs[]." + sourceField.substring(sourceField.indexOf('.') + 1);
+        }
+        JsonNode node = root;
+        for (String part : normalized.split("\\.")) {
+            if (!StringUtils.hasText(part)) continue;
+            if (part.endsWith("[]")) {
+                String arrayName = part.substring(0, part.length() - 2);
+                node = node.path(arrayName);
+                if (!node.isArray()) return null;
+                node = node.path(Math.min(rowIndex, Math.max(0, node.size() - 1)));
+            } else {
+                node = node.path(part);
+            }
+        }
+        return node;
+    }
+
+    private IntegrationInterface findEnabledInterface(String interfaceCode) {
+        if (!StringUtils.hasText(interfaceCode)) return null;
+        return interfaceMapper.selectOne(new LambdaQueryWrapper<IntegrationInterface>()
+            .eq(IntegrationInterface::getInterfaceCode, interfaceCode)
+            .eq(IntegrationInterface::getEnabled, (short) 1)
+            .eq(IntegrationInterface::getDeleted, (short) 0)
+            .last("LIMIT 1"));
+    }
+
+    private IntegrationConnectionConfig findConnection(String connectionCode) {
+        if (!StringUtils.hasText(connectionCode)) return null;
+        return connectionMapper.selectOne(new LambdaQueryWrapper<IntegrationConnectionConfig>()
+            .eq(IntegrationConnectionConfig::getConnectionCode, connectionCode)
+            .eq(IntegrationConnectionConfig::getEnabled, (short) 1)
+            .eq(IntegrationConnectionConfig::getDeleted, (short) 0)
+            .last("LIMIT 1"));
+    }
+
+    private SapRfcConfig findSapConfig(String configCode) {
+        if (!StringUtils.hasText(configCode)) return null;
+        return sapRfcConfigMapper.selectOne(new LambdaQueryWrapper<SapRfcConfig>()
+            .eq(SapRfcConfig::getConfigCode, configCode)
+            .eq(SapRfcConfig::getEnabled, (short) 1)
+            .eq(SapRfcConfig::getDeleted, (short) 0)
+            .last("LIMIT 1"));
+    }
+
+    private void applyHeaders(HttpRequest.Builder builder, String headerConfig) throws Exception {
+        if (!StringUtils.hasText(headerConfig)) return;
+        Map<String, Object> headers = OBJECT_MAPPER.readValue(headerConfig, MAP_TYPE);
+        for (Map.Entry<String, Object> entry : headers.entrySet()) {
+            if (StringUtils.hasText(entry.getKey()) && entry.getValue() != null) {
+                builder.header(entry.getKey(), String.valueOf(entry.getValue()));
+            }
+        }
+    }
+
+    private void applyAuth(HttpRequest.Builder builder, IntegrationConnectionConfig connection) throws Exception {
+        if (!StringUtils.hasText(connection.getAuthType()) || "NONE".equals(connection.getAuthType())) return;
+        Map<String, Object> auth = StringUtils.hasText(connection.getAuthConfig())
+            ? OBJECT_MAPPER.readValue(connection.getAuthConfig(), MAP_TYPE)
+            : Map.of();
+        if ("BASIC".equals(connection.getAuthType())) {
+            String username = stringValue(auth.get("username"));
+            String password = stringValue(auth.get("password"));
+            String token = Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
+            builder.header("Authorization", "Basic " + token);
+        } else if ("BEARER".equals(connection.getAuthType())) {
+            builder.header("Authorization", "Bearer " + stringValue(auth.get("token")));
+        } else if ("API_KEY".equals(connection.getAuthType())) {
+            builder.header(StringUtils.hasText(stringValue(auth.get("headerName"))) ? stringValue(auth.get("headerName")) : "X-API-Key",
+                stringValue(auth.get("apiKey")));
+        }
+    }
+
+    private String joinUrl(String baseUrl, String path) {
+        if (!StringUtils.hasText(path)) return baseUrl;
+        if (baseUrl.endsWith("/") && path.startsWith("/")) return baseUrl + path.substring(1);
+        if (!baseUrl.endsWith("/") && !path.startsWith("/")) return baseUrl + "/" + path;
+        return baseUrl + path;
+    }
+
+    private String toJson(Object value) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(value);
+        } catch (Exception ex) {
+            return String.valueOf(value);
+        }
+    }
+
+    private Object invokeNoArg(Object target, String methodName) throws Exception {
+        Method method = target.getClass().getMethod(methodName);
+        return method.invoke(target);
+    }
+
+    private String rootMessage(Exception ex) {
+        Throwable current = ex;
+        while (current.getCause() != null) current = current.getCause();
+        return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private record ExecuteResult(boolean success, String responsePayload, String errorMessage, boolean retryable) {
+        static ExecuteResult success(String responsePayload) {
+            return new ExecuteResult(true, responsePayload, null, false);
+        }
+        static ExecuteResult failed(String errorMessage, boolean retryable) {
+            return new ExecuteResult(false, null, errorMessage, retryable);
+        }
+        static ExecuteResult failed(String errorMessage, String responsePayload, boolean retryable) {
+            return new ExecuteResult(false, responsePayload, errorMessage, retryable);
+        }
+    }
+
+    private static class JcoDestinationProviderInvocationHandler implements InvocationHandler {
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            return switch (method.getName()) {
+                case "getDestinationProperties" -> JCO_DESTINATION_PROPS.get(String.valueOf(args[0]));
+                case "supportsEvents" -> false;
+                case "setDestinationDataEventListener" -> null;
+                default -> null;
+            };
+        }
     }
 
     private SapRfcConfig toSapConfig(SapRfcConfigDTO dto, SapRfcConfig entity) {

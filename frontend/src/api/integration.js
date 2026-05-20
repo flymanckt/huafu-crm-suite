@@ -91,3 +91,10 @@ export function repushLog(id) {
   return request.post(`${BASE}/logs/${id}/repush`)
 }
 
+export function executeLog(id) {
+  return request.post(`${BASE}/logs/${id}/execute`)
+}
+
+export function executePendingLogs(limit = 20) {
+  return request.post(`${BASE}/logs/execute-pending`, null, { params: { limit } })
+}

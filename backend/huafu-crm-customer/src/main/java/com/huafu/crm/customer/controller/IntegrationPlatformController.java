@@ -168,4 +168,16 @@ public class IntegrationPlatformController {
     public Result<IntegrationLog> repushLog(@PathVariable Long id) {
         return Result.ok(service.repushLog(id));
     }
+
+    @PostMapping("/logs/{id}/execute")
+    @Operation(summary = "立即执行集成日志")
+    public Result<IntegrationLog> executeLog(@PathVariable Long id) {
+        return Result.ok(service.executeLog(id));
+    }
+
+    @PostMapping("/logs/execute-pending")
+    @Operation(summary = "执行待推送集成日志")
+    public Result<Integer> executePendingLogs(@RequestParam(defaultValue = "20") int limit) {
+        return Result.ok(service.executePendingLogs(limit));
+    }
 }

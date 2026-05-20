@@ -149,6 +149,7 @@
               <el-option v-for="item in logStatuses" :key="item" :label="item" :value="item" />
             </el-select>
             <el-button @click="loadLogs">查询</el-button>
+            <el-button type="primary" @click="handleExecutePending">执行待推送</el-button>
           </div>
           <el-table :data="logs" v-loading="loading" border stripe max-height="calc(100vh - 370px)">
             <el-table-column prop="createdTime" label="时间" width="170" />
@@ -159,9 +160,10 @@
             </el-table-column>
             <el-table-column prop="retryCount" label="重试" width="80" />
             <el-table-column prop="errorMessage" label="异常" min-width="260" show-overflow-tooltip />
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" :disabled="row.status === 'SUCCESS'" @click="handleRepush(row)">重新推送</el-button>
+                <el-button link type="primary" :disabled="row.status === 'SUCCESS' || row.status === 'RUNNING'" @click="handleExecute(row)">立即推送</el-button>
+                <el-button link type="warning" :disabled="row.status === 'SUCCESS' || row.status === 'RUNNING'" @click="handleRepush(row)">重推</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -503,6 +505,8 @@ import {
   deleteMapping,
   deleteSapRfcConfig,
   directions,
+  executeLog,
+  executePendingLogs,
   listConnections,
   listInterfaces,
   listMappings,
@@ -1238,7 +1242,19 @@ async function handleDeleteMapping(id) {
 
 async function handleRepush(row) {
   await repushLog(row.id)
-  ElMessage.success('已加入重新推送队列')
+  ElMessage.success('重推已执行')
+  loadLogs()
+}
+
+async function handleExecute(row) {
+  await executeLog(row.id)
+  ElMessage.success('已执行推送')
+  loadLogs()
+}
+
+async function handleExecutePending() {
+  const count = await executePendingLogs(20)
+  ElMessage.success(`已执行${count || 0}条待推送日志`)
   loadLogs()
 }
 

@@ -39,4 +39,6 @@ public interface IntegrationPlatformService {
     PageResult<IntegrationLog> pageLogs(long current, long size, String interfaceCode, String status, String keyword);
     IntegrationLog createLog(IntegrationLogCreateDTO dto);
     IntegrationLog repushLog(Long id);
+    IntegrationLog executeLog(Long id);
+    int executePendingLogs(int limit);
 }

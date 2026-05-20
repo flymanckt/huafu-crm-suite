@@ -636,12 +636,12 @@ CRM 是高频工作系统，不是展示型官网。页面应保持：
 
 ### 11.20 集成平台与 SAP 对接
 
-现状：已新增集成平台基础模型和页面入口，支持通用连接配置、SAP RFC 配置、SAP/通用接口定义、结构化字段映射、平台日志和异常重推。客户主数据的 SAP 信息保存会生成 `SAP_CUS` 待推送日志，SAP 编号允许先为空，并提供 SAP 回传接口用于回填编号和相关字段。SAP RFC 目前完成配置和参数校验，真实连通性需接入 SAP JCo 或企业已有 RFC 网关执行器。
+现状：已新增集成平台基础模型和页面入口，支持通用连接配置、SAP RFC 配置、SAP/通用接口定义、结构化字段映射、平台日志、自动消费待推送日志和异常重推。客户主数据的 SAP 信息保存会生成 `SAP_CUS` 待推送日志，SAP 编号允许先为空，并提供 SAP 回传接口用于回填编号和相关字段。HTTP 类接口已可直接执行；SAP RFC 执行依赖 `sapjco3.jar` 和对应本机库，运行时缺失 JCo 时日志会从 `PENDING` 转为 `FAILED` 并写明原因。
 
 优化方向：
 
 1. 将 SAP RFC、SAP OData、SAP IDoc 与通用 REST/SOAP/Webhook/SFTP/MQ/DB 统一纳入集成平台管理。
-2. 接入 SAP JCo 执行器：按 `connectionCode` 获取 RFC 连接池，按接口定义调用 BAPI/RFC 函数。
+2. 完成生产级 SAP JCo 部署：将 `sapjco3.jar` 和对应本机库加入 customer 服务运行时 classpath/library path，按 `connectionCode` 获取 RFC 连接池，按接口定义调用 BAPI/RFC 函数。
 3. 建立标准执行链路：业务触发、按单值参数/表参数生成报文、接口调用、响应解析、日志落库、失败重试。
 4. 字段映射继续增强转换函数，例如日期格式转换、字典映射、固定值、组合字段、空值兜底。
 5. 平台日志支持按接口、业务键、状态、时间、异常关键词查询，并支持批量重推。
@@ -838,6 +838,7 @@ CRM 是高频工作系统，不是展示型官网。页面应保持：
 6. 每次调用必须写入平台日志，失败时记录请求、响应、异常和重试次数。
 7. 异常数据通过日志页重新推送；批量重推需要确认影响范围和权限。
 8. 客户 SAP 信息保存后会按 `CUSTOMER_SAP_INFO:{customerId}:{sapInfoId}` 写入 `SAP_CUS` 日志；SAP 回传可调用 `/crm/v1/customers/{customerId}/sap-infos/{sapInfoId}/sap-response` 回填 `sapCode` 等字段。
+9. 平台日志支持 `PENDING -> RUNNING -> SUCCESS/FAILED/RETRYING` 状态流转，定时任务默认每 30 秒消费待推送日志，也可在日志页手工点击“立即推送”或“执行待推送”。
 
 ## 14. 测试与验收标准
 
