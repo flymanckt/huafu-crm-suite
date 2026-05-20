@@ -602,6 +602,33 @@ const customerFields = [
   { key: 'remark', label: '备注' }
 ]
 
+const customerSapInfoFields = [
+  { key: 'sapInfos[].id', label: 'SAP信息ID', type: 'number' },
+  { key: 'sapInfos[].sapCode', label: 'SAP信息-SAP编号', required: true },
+  { key: 'sapInfos[].accountGroup', label: 'SAP信息-账户组' },
+  { key: 'sapInfos[].countryCode', label: 'SAP信息-国家代码' },
+  { key: 'sapInfos[].companyCode', label: 'SAP信息-公司代码' },
+  { key: 'sapInfos[].salesOrg', label: 'SAP信息-销售组织' },
+  { key: 'sapInfos[].distributionChannel', label: 'SAP信息-分销渠道' },
+  { key: 'sapInfos[].division', label: 'SAP信息-产品组' },
+  { key: 'sapInfos[].description', label: 'SAP信息-说明' },
+  { key: 'sapInfos[].isDefault', label: 'SAP信息-是否默认', type: 'number' }
+]
+
+const customerSapOrgFields = [
+  { key: 'sapOrgs[].id', label: 'SAP组织ID', type: 'number' },
+  { key: 'sapOrgs[].sapCode', label: 'SAP组织-SAP编号' },
+  { key: 'sapOrgs[].companyCode', label: 'SAP组织-公司代码', required: true },
+  { key: 'sapOrgs[].salesOrg', label: 'SAP组织-销售组织' },
+  { key: 'sapOrgs[].salesOffice', label: 'SAP组织-销售办公室' },
+  { key: 'sapOrgs[].salesGroup', label: 'SAP组织-销售组' },
+  { key: 'sapOrgs[].priceList', label: 'SAP组织-价格清单' },
+  { key: 'sapOrgs[].currency', label: 'SAP组织-货币' },
+  { key: 'sapOrgs[].deliveryPlant', label: 'SAP组织-交货工厂' },
+  { key: 'sapOrgs[].paymentTerms', label: 'SAP组织-付款条件' },
+  { key: 'sapOrgs[].taxClassification', label: 'SAP组织-税分类' }
+]
+
 const baseRecordFields = [
   { key: 'recordNo', label: '记录编号' },
   { key: 'title', label: '记录标题' },
@@ -613,6 +640,8 @@ const baseRecordFields = [
 
 const crmModuleFieldMap = {
   customer: customerFields,
+  customerSapInfo: customerSapInfoFields,
+  customerSapOrg: customerSapOrgFields,
   ...Object.fromEntries(Object.entries(businessModules).map(([key, config]) => [
     key,
     [
@@ -629,6 +658,8 @@ const crmModuleFieldMap = {
 
 const crmModuleOptions = [
   { label: '客户主数据', value: 'customer' },
+  { label: '客户SAP信息（明细）', value: 'customerSapInfo' },
+  { label: '客户SAP组织（明细）', value: 'customerSapOrg' },
   ...Object.entries(businessModules).map(([value, config]) => ({ label: config.title, value }))
 ]
 const fieldTypes = ['STRING', 'NUMBER', 'DATE', 'DATETIME', 'BOOLEAN', 'DECIMAL', 'JSON', 'ARRAY']

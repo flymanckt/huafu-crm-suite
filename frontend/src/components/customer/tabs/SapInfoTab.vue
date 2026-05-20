@@ -21,7 +21,10 @@
         </template>
       </el-table-column>
       <el-table-column prop="accountGroup" label="账户组" width="120">
-        <template #default="{ row }"><el-input v-if="row._editing" v-model="row.accountGroup" size="small" /><span v-else>{{ row.accountGroup }}</span></template>
+        <template #default="{ row }">
+          <DictSelect v-if="row._editing" v-model="row.accountGroup" dict-code="sap_account_group" size="small" style="width:100%" />
+          <span v-else>{{ row.accountGroup }}</span>
+        </template>
       </el-table-column>
       <el-table-column prop="countryCode" label="国家代码" width="100">
         <template #default="{ row }"><el-input v-if="row._editing" v-model="row.countryCode" size="small" /><span v-else>{{ row.countryCode }}</span></template>
@@ -49,6 +52,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createSapInfoV1, deleteSapInfoV1, getSapInfoListV1, updateSapInfoV1 } from '@/api/customer'
+import DictSelect from '@/components/Dict/DictSelect.vue'
 
 const props = defineProps({ customerId: { type: [String, Number], required: true } })
 const tableData = ref([])
