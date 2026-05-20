@@ -116,7 +116,7 @@
               <template #default="{ row }">{{ moduleLabel(row.sourceModule) }}</template>
             </el-table-column>
             <el-table-column label="CRM字段" min-width="180" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.sourceFieldLabel || row.sourceField }}</template>
+              <template #default="{ row }">{{ mappingSourceFieldText(row) }}</template>
             </el-table-column>
             <el-table-column label="接口单值字段" min-width="170" show-overflow-tooltip>
               <template #default="{ row }">{{ interfaceScalarFieldText(row) }}</template>
@@ -344,7 +344,7 @@
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="传参模式">
-              <el-radio-group v-model="mappingForm.parameterMode">
+              <el-radio-group v-model="mappingForm.parameterMode" @change="handleParameterModeChange">
                 <el-radio-button label="SINGLE">单值参数</el-radio-button>
                 <el-radio-button label="TABLE">表参数</el-radio-button>
               </el-radio-group>
@@ -372,7 +372,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="!isTableMapping" :span="12">
             <el-form-item label="CRM字段">
               <el-select
                 v-model="mappingForm.sourceField"
@@ -392,7 +392,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="!isTableMapping" :span="12">
             <el-form-item label="字段显示名">
               <el-input v-model="mappingForm.sourceFieldLabel" placeholder="自动带出，可手工调整" />
             </el-form-item>
@@ -400,31 +400,77 @@
           <el-col :span="24" v-if="isTableMapping">
             <el-alert
               class="table-field-alert"
-              title="表参数会先按上面的表/数组名称定位参数，再把这里的表内字段作为每一行中的列字段。"
+              title="一个表参数映射维护一组表内字段。保存后同一个接口只需要这一条表参数映射。"
               type="success"
               show-icon
               :closable="false"
             />
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="isTableMapping" :span="24">
+            <div class="table-field-toolbar">
+              <span>表内字段</span>
+              <el-button size="small" type="primary" @click="addTableField">新增字段</el-button>
+            </div>
+            <el-table :data="mappingForm.tableFields" border size="small" class="table-field-editor">
+              <el-table-column label="序号" width="64" align="center">
+                <template #default="{ $index }">{{ $index + 1 }}</template>
+              </el-table-column>
+              <el-table-column label="CRM字段" min-width="220">
+                <template #default="{ row }">
+                  <el-select v-model="row.sourceField" style="width:100%" filterable allow-create default-first-option @change="handleTableFieldSourceChange(row)">
+                    <el-option v-for="item in currentCrmFieldOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="CRM字段名" min-width="140">
+                <template #default="{ row }"><el-input v-model="row.sourceFieldLabel" /></template>
+              </el-table-column>
+              <el-table-column label="表内字段名" min-width="150">
+                <template #default="{ row }"><el-input v-model="row.targetField" placeholder="如 KUNNR / NAME1" /></template>
+              </el-table-column>
+              <el-table-column label="表字段名" min-width="130">
+                <template #default="{ row }"><el-input v-model="row.targetFieldLabel" /></template>
+              </el-table-column>
+              <el-table-column label="类型" width="130">
+                <template #default="{ row }">
+                  <el-select v-model="row.fieldType" style="width:100%" filterable allow-create default-first-option>
+                    <el-option v-for="item in fieldTypes" :key="item" :label="item" :value="item" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="必填" width="80" align="center">
+                <template #default="{ row }"><el-switch v-model="row.required" :active-value="1" :inactive-value="0" /></template>
+              </el-table-column>
+              <el-table-column label="默认值" min-width="120">
+                <template #default="{ row }"><el-input v-model="row.defaultValue" /></template>
+              </el-table-column>
+              <el-table-column label="转换规则" min-width="180">
+                <template #default="{ row }"><el-input v-model="row.transformRule" /></template>
+              </el-table-column>
+              <el-table-column label="操作" width="80" fixed="right">
+                <template #default="{ $index }"><el-button link type="danger" @click="removeTableField($index)">删除</el-button></template>
+              </el-table-column>
+            </el-table>
+          </el-col>
+          <el-col v-if="!isTableMapping" :span="12">
             <el-form-item :label="targetFieldLabel">
               <el-input v-model="mappingForm.targetField" :placeholder="targetFieldPlaceholder" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="!isTableMapping" :span="12">
             <el-form-item :label="targetFieldNameLabel">
               <el-input v-model="mappingForm.targetFieldLabel" placeholder="展示名，可选" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col v-if="!isTableMapping" :span="8">
             <el-form-item label="字段类型">
               <el-select v-model="mappingForm.fieldType" style="width:100%" filterable allow-create default-first-option>
                 <el-option v-for="item in fieldTypes" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8"><el-form-item label="必填"><el-switch v-model="mappingForm.required" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="默认值"><el-input v-model="mappingForm.defaultValue" /></el-form-item></el-col>
+          <el-col v-if="!isTableMapping" :span="8"><el-form-item label="必填"><el-switch v-model="mappingForm.required" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
+          <el-col v-if="!isTableMapping" :span="24"><el-form-item label="默认值"><el-input v-model="mappingForm.defaultValue" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="转换规则"><el-input v-model="mappingForm.transformRule" type="textarea" :rows="3" placeholder="可写枚举映射、格式化规则、简单表达式说明，如 date:yyyyMMdd 或 map:{A:01,B:02}" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="备注"><el-input v-model="mappingForm.remark" /></el-form-item></el-col>
         </el-row>
@@ -494,6 +540,8 @@ const defaultMapping = () => ({
   sourceFieldLabel: '',
   targetField: '',
   targetFieldLabel: '',
+  tableFieldMappings: '',
+  tableFields: [],
   fieldType: 'STRING',
   required: 0,
   defaultValue: '',
@@ -585,6 +633,17 @@ const crmModuleOptions = [
 ]
 const fieldTypes = ['STRING', 'NUMBER', 'DATE', 'DATETIME', 'BOOLEAN', 'DECIMAL', 'JSON', 'ARRAY']
 const parameterModes = { SINGLE: '单值', TABLE: '表参数' }
+const defaultTableField = () => ({
+  sourceField: '',
+  sourceFieldLabel: '',
+  targetField: '',
+  targetFieldLabel: '',
+  fieldType: 'STRING',
+  required: 0,
+  defaultValue: '',
+  transformRule: '',
+  remark: ''
+})
 
 const sapProtocolOptions = [
   { label: 'SAP RFC / BAPI', value: 'SAP_RFC' },
@@ -861,6 +920,10 @@ function openMapping(row) {
   mappingForm.value = row
     ? { ...defaultMapping(), ...row }
     : { ...defaultMapping(), interfaceId: selectedInterfaceId.value }
+  mappingForm.value.tableFields = parseTableFields(mappingForm.value.tableFieldMappings)
+  if (mappingForm.value.parameterMode === 'TABLE' && mappingForm.value.tableFields.length === 0) {
+    mappingForm.value.tableFields = buildLegacyTableFields(mappingForm.value)
+  }
   normalizeMappingLabels()
   mappingDialog.value = true
 }
@@ -882,6 +945,18 @@ async function submitMapping() {
 function handleMappingModuleChange() {
   mappingForm.value.sourceField = ''
   mappingForm.value.sourceFieldLabel = ''
+  mappingForm.value.tableFields = mappingForm.value.tableFields.map(row => ({
+    ...row,
+    sourceField: '',
+    sourceFieldLabel: ''
+  }))
+}
+
+function handleParameterModeChange(mode) {
+  if (mode === 'TABLE' && mappingForm.value.tableFields.length === 0) {
+    mappingForm.value.tableFields = buildLegacyTableFields(mappingForm.value)
+    if (mappingForm.value.tableFields.length === 0) addTableField()
+  }
 }
 
 function handleMappingSourceFieldChange() {
@@ -892,7 +967,35 @@ function handleMappingSourceFieldChange() {
   else if (!mappingForm.value.fieldType) mappingForm.value.fieldType = 'STRING'
 }
 
+function addTableField() {
+  mappingForm.value.tableFields.push(defaultTableField())
+}
+
+function removeTableField(index) {
+  mappingForm.value.tableFields.splice(index, 1)
+}
+
+function handleTableFieldSourceChange(row) {
+  const field = findCurrentCrmField(row.sourceField)
+  if (field) {
+    row.sourceFieldLabel = field.label
+    if (field.type === 'number') row.fieldType = 'NUMBER'
+    else if (field.type === 'date') row.fieldType = 'DATE'
+    else if (!row.fieldType) row.fieldType = 'STRING'
+  }
+}
+
 function normalizeMappingLabels() {
+  if (mappingForm.value.parameterMode === 'TABLE') {
+    mappingForm.value.tableFields.forEach(row => {
+      const field = findCurrentCrmField(row.sourceField)
+      if (field && !row.sourceFieldLabel) row.sourceFieldLabel = field.label
+      if (!row.targetFieldLabel && row.targetField) row.targetFieldLabel = row.targetField
+      if (!row.fieldType) row.fieldType = 'STRING'
+      if (row.required == null) row.required = 0
+    })
+    return
+  }
   const field = findCurrentCrmField(mappingForm.value.sourceField)
   if (field && !mappingForm.value.sourceFieldLabel) {
     mappingForm.value.sourceFieldLabel = field.label
@@ -908,8 +1011,27 @@ function findCurrentCrmField(fieldKey) {
 
 function buildMappingPayload() {
   normalizeMappingLabels()
+  if (mappingForm.value.parameterMode === 'TABLE') {
+    const tableFields = normalizeTableFields(mappingForm.value.tableFields)
+    const first = tableFields[0] || defaultTableField()
+    return {
+      ...mappingForm.value,
+      sourceField: first.sourceField || '__TABLE__',
+      sourceFieldLabel: first.sourceFieldLabel || '表字段组',
+      targetField: first.targetField || '__TABLE__',
+      targetFieldLabel: first.targetFieldLabel || mappingForm.value.parameterGroup || '表参数',
+      tableFieldMappings: JSON.stringify(tableFields),
+      fieldType: 'ARRAY',
+      required: 0,
+      defaultValue: '',
+      parameterMode: 'TABLE',
+      mappingDirection: mappingForm.value.mappingDirection || 'OUTBOUND',
+      sourceModule: mappingForm.value.sourceModule || 'customer'
+    }
+  }
   return {
     ...mappingForm.value,
+    tableFieldMappings: '',
     parameterMode: mappingForm.value.parameterMode || 'SINGLE',
     mappingDirection: mappingForm.value.mappingDirection || 'OUTBOUND',
     sourceModule: mappingForm.value.sourceModule || 'customer',
@@ -922,6 +1044,23 @@ function validateMappingPayload(payload) {
     ElMessage.warning('请选择CRM模块')
     return false
   }
+  if (payload.parameterMode === 'TABLE') {
+    if (!payload.parameterGroup) {
+      ElMessage.warning('表参数需要填写表/数组名称')
+      return false
+    }
+    const tableFields = parseTableFields(payload.tableFieldMappings)
+    if (tableFields.length === 0) {
+      ElMessage.warning('表参数至少需要维护一行表内字段')
+      return false
+    }
+    const invalidIndex = tableFields.findIndex(row => !row.sourceField || !row.targetField)
+    if (invalidIndex >= 0) {
+      ElMessage.warning(`第${invalidIndex + 1}行需要配置CRM字段和表内字段名`)
+      return false
+    }
+    return true
+  }
   if (!payload.sourceField) {
     ElMessage.warning('请选择CRM字段')
     return false
@@ -930,15 +1069,61 @@ function validateMappingPayload(payload) {
     ElMessage.warning(payload.parameterMode === 'TABLE' ? '请填写表内字段名' : '请填写接口字段')
     return false
   }
-  if (payload.parameterMode === 'TABLE' && !payload.parameterGroup) {
-    ElMessage.warning('表参数需要填写表/数组名称')
-    return false
-  }
   return true
+}
+
+function parseTableFields(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return normalizeTableFields(value)
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? normalizeTableFields(parsed) : []
+  } catch {
+    return []
+  }
+}
+
+function normalizeTableFields(rows) {
+  return (rows || [])
+    .map(row => ({
+      sourceField: row.sourceField || '',
+      sourceFieldLabel: row.sourceFieldLabel || '',
+      targetField: row.targetField || '',
+      targetFieldLabel: row.targetFieldLabel || '',
+      fieldType: row.fieldType || 'STRING',
+      required: row.required ? 1 : 0,
+      defaultValue: row.defaultValue || '',
+      transformRule: row.transformRule || '',
+      remark: row.remark || ''
+    }))
+    .filter(row => row.sourceField || row.targetField || row.sourceFieldLabel || row.targetFieldLabel)
+}
+
+function buildLegacyTableFields(mapping) {
+  if (!mapping.sourceField && !mapping.targetField) return []
+  return [{
+    ...defaultTableField(),
+    sourceField: mapping.sourceField,
+    sourceFieldLabel: mapping.sourceFieldLabel,
+    targetField: mapping.targetField,
+    targetFieldLabel: mapping.targetFieldLabel,
+    fieldType: mapping.fieldType || 'STRING',
+    required: mapping.required ? 1 : 0,
+    defaultValue: mapping.defaultValue || '',
+    transformRule: mapping.transformRule || '',
+    remark: mapping.remark || ''
+  }]
 }
 
 function parameterModeLabel(value) {
   return parameterModes[value] || value || '单值'
+}
+
+function mappingSourceFieldText(row) {
+  if (row.parameterMode !== 'TABLE') return row.sourceFieldLabel || row.sourceField || '-'
+  const fields = parseTableFields(row.tableFieldMappings)
+  if (fields.length === 0) return row.sourceFieldLabel || row.sourceField || '-'
+  return `${fields.length}个字段：${fields.map(item => item.sourceFieldLabel || item.sourceField).join('、')}`
 }
 
 function mappingParameterLocation(row) {
@@ -953,7 +1138,9 @@ function interfaceScalarFieldText(row) {
 
 function tableFieldText(row) {
   if (row.parameterMode !== 'TABLE') return '-'
-  return row.targetFieldLabel || row.targetField || '-'
+  const fields = parseTableFields(row.tableFieldMappings)
+  if (fields.length === 0) return row.targetFieldLabel || row.targetField || '-'
+  return fields.map(item => item.targetFieldLabel || item.targetField).join('、')
 }
 
 function moduleLabel(value) {
@@ -992,4 +1179,6 @@ onMounted(() => {
 .pager { margin-top: 12px; justify-content: flex-end; }
 .interface-alert, .table-field-alert { margin-bottom: 14px; }
 .interface-dialog :deep(.el-radio-button__inner) { min-width: 92px; }
+.table-field-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:600; color:#303133; }
+.table-field-editor { margin-bottom:14px; }
 </style>

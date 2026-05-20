@@ -18,6 +18,7 @@ public class IntegrationFieldMapping {
     private String sourceFieldLabel;
     private String targetField;
     private String targetFieldLabel;
+    private String tableFieldMappings;
     private String fieldType;
     private Short required;
     private String defaultValue;
@@ -48,6 +49,8 @@ public class IntegrationFieldMapping {
     public void setTargetField(String targetField) { this.targetField = targetField; }
     public String getTargetFieldLabel() { return targetFieldLabel; }
     public void setTargetFieldLabel(String targetFieldLabel) { this.targetFieldLabel = targetFieldLabel; }
+    public String getTableFieldMappings() { return tableFieldMappings; }
+    public void setTableFieldMappings(String tableFieldMappings) { this.tableFieldMappings = tableFieldMappings; }
     public String getFieldType() { return fieldType; }
     public void setFieldType(String fieldType) { this.fieldType = fieldType; }
     public Short getRequired() { return required; }

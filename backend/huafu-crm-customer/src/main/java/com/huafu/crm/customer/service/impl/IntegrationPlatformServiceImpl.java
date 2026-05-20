@@ -2,6 +2,8 @@ package com.huafu.crm.customer.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huafu.crm.common.api.PageResult;
 import com.huafu.crm.common.context.UserContext;
 import com.huafu.crm.common.exception.BizException;
@@ -23,14 +25,17 @@ import com.huafu.crm.customer.mapper.IntegrationLogMapper;
 import com.huafu.crm.customer.mapper.SapRfcConfigMapper;
 import com.huafu.crm.customer.service.IntegrationPlatformService;
 import java.time.LocalDateTime;
-import java.util.Set;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
 public class IntegrationPlatformServiceImpl implements IntegrationPlatformService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final TypeReference<List<Map<String, Object>>> TABLE_FIELD_LIST_TYPE = new TypeReference<>() {};
     private static final Set<String> SAP_PROTOCOLS = Set.of("SAP_RFC", "SAP_ODATA", "SAP_IDOC");
     private static final Set<String> GENERIC_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SFTP", "FTP", "DATABASE", "KAFKA", "RABBITMQ", "CUSTOM");
     private static final Set<String> PARAMETER_MODES = Set.of("SINGLE", "TABLE");
@@ -423,15 +428,18 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     }
 
     private IntegrationFieldMapping toMapping(IntegrationFieldMappingDTO dto, IntegrationFieldMapping entity) {
+        String mode = StringUtils.hasText(dto.parameterMode()) ? InputSanitizer.safeText(dto.parameterMode()) : "SINGLE";
+        boolean tableMode = "TABLE".equals(mode);
         entity.setInterfaceId(dto.interfaceId());
-        entity.setParameterMode(StringUtils.hasText(dto.parameterMode()) ? InputSanitizer.safeText(dto.parameterMode()) : "SINGLE");
+        entity.setParameterMode(mode);
         entity.setParameterGroup(InputSanitizer.safeText(dto.parameterGroup()));
         entity.setMappingDirection(StringUtils.hasText(dto.mappingDirection()) ? InputSanitizer.safeText(dto.mappingDirection()) : "OUTBOUND");
         entity.setSourceModule(StringUtils.hasText(dto.sourceModule()) ? InputSanitizer.safeText(dto.sourceModule()) : "customer");
-        entity.setSourceField(InputSanitizer.safeText(dto.sourceField()));
+        entity.setSourceField(StringUtils.hasText(dto.sourceField()) ? InputSanitizer.safeText(dto.sourceField()) : tableMode ? "__TABLE__" : null);
         entity.setSourceFieldLabel(InputSanitizer.safeText(dto.sourceFieldLabel()));
-        entity.setTargetField(InputSanitizer.safeText(dto.targetField()));
+        entity.setTargetField(StringUtils.hasText(dto.targetField()) ? InputSanitizer.safeText(dto.targetField()) : tableMode ? "__TABLE__" : null);
         entity.setTargetFieldLabel(InputSanitizer.safeText(dto.targetFieldLabel()));
+        entity.setTableFieldMappings(StringUtils.hasText(dto.tableFieldMappings()) ? InputSanitizer.rejectUnsafeHtml(dto.tableFieldMappings()) : null);
         entity.setFieldType(StringUtils.hasText(dto.fieldType()) ? InputSanitizer.safeText(dto.fieldType()) : "STRING");
         entity.setRequired(dto.required() == null ? (short) 0 : dto.required());
         entity.setDefaultValue(InputSanitizer.safeText(dto.defaultValue()));
@@ -456,9 +464,37 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if (!StringUtils.hasText(dto.sourceModule())) {
             throw new BizException(1001, "请选择CRM模块");
         }
-        if (!StringUtils.hasText(dto.sourceField()) || !StringUtils.hasText(dto.targetField())) {
+        if ("TABLE".equals(mode)) {
+            validateTableFieldMappings(dto.tableFieldMappings());
+        } else if (!StringUtils.hasText(dto.sourceField()) || !StringUtils.hasText(dto.targetField())) {
             throw new BizException(1001, "请配置CRM字段和接口字段");
         }
+    }
+
+    private void validateTableFieldMappings(String tableFieldMappings) {
+        if (!StringUtils.hasText(tableFieldMappings)) {
+            throw new BizException(1001, "表参数至少需要维护一行表内字段");
+        }
+        try {
+            List<Map<String, Object>> rows = OBJECT_MAPPER.readValue(tableFieldMappings, TABLE_FIELD_LIST_TYPE);
+            if (rows.isEmpty()) {
+                throw new BizException(1001, "表参数至少需要维护一行表内字段");
+            }
+            for (int i = 0; i < rows.size(); i++) {
+                Map<String, Object> row = rows.get(i);
+                if (!hasText(row.get("sourceField")) || !hasText(row.get("targetField"))) {
+                    throw new BizException(1001, "第" + (i + 1) + "行表字段需要配置CRM字段和表内字段名");
+                }
+            }
+        } catch (BizException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BizException(1001, "表字段配置不是合法JSON数组");
+        }
+    }
+
+    private boolean hasText(Object value) {
+        return value != null && StringUtils.hasText(String.valueOf(value));
     }
 
     private SapRfcConfig requireSapConfig(Long id) {
