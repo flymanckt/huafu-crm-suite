@@ -482,6 +482,9 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             }
             for (int i = 0; i < rows.size(); i++) {
                 Map<String, Object> row = rows.get(i);
+                if (!hasText(row.get("sourceModule"))) {
+                    throw new BizException(1001, "第" + (i + 1) + "行表字段需要选择CRM模块");
+                }
                 if (!hasText(row.get("sourceField")) || !hasText(row.get("targetField"))) {
                     throw new BizException(1001, "第" + (i + 1) + "行表字段需要配置CRM字段和表内字段名");
                 }

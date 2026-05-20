@@ -113,7 +113,7 @@
             </el-table-column>
             <el-table-column prop="mappingDirection" label="方向" width="110" />
             <el-table-column prop="sourceModule" label="CRM模块" min-width="150">
-              <template #default="{ row }">{{ moduleLabel(row.sourceModule) }}</template>
+              <template #default="{ row }">{{ mappingModuleText(row) }}</template>
             </el-table-column>
             <el-table-column label="CRM字段" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">{{ mappingSourceFieldText(row) }}</template>
@@ -332,11 +332,11 @@
       <template #footer><el-button @click="interfaceDialog=false">取消</el-button><el-button type="primary" @click="submitInterface">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="mappingDialog" :title="mappingForm.id ? '编辑字段映射' : '新增字段映射'" width="900px">
+    <el-dialog v-model="mappingDialog" :title="mappingForm.id ? '编辑字段映射' : '新增字段映射'" width="1080px">
       <el-form :model="mappingForm" label-width="120px">
         <el-alert
           class="interface-alert"
-          title="单值参数用于普通字段，表参数用于 SAP TABLES 或 JSON数组行字段。CRM字段从模块字段清单中选择，接口字段填写对方接口的字段名。"
+          title="单值参数用于普通字段；表参数用于 SAP TABLES 或 JSON数组行字段。表参数的每一行都可以选择不同CRM模块字段。"
           type="info"
           show-icon
           :closable="false"
@@ -366,7 +366,7 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="CRM模块">
+            <el-form-item :label="isTableMapping ? '默认CRM模块' : 'CRM模块'">
               <el-select v-model="mappingForm.sourceModule" style="width:100%" filterable @change="handleMappingModuleChange">
                 <el-option v-for="item in crmModuleOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
@@ -400,7 +400,7 @@
           <el-col :span="24" v-if="isTableMapping">
             <el-alert
               class="table-field-alert"
-              title="一个表参数映射维护一组表内字段。保存后同一个接口只需要这一条表参数映射。"
+              title="一个表参数映射维护一组表内字段；每一行可独立选择CRM模块，适合同一接口同时读取客户主数据、SAP信息、SAP组织等字段。"
               type="success"
               show-icon
               :closable="false"
@@ -415,10 +415,17 @@
               <el-table-column label="序号" width="64" align="center">
                 <template #default="{ $index }">{{ $index + 1 }}</template>
               </el-table-column>
-              <el-table-column label="CRM字段" min-width="220">
+              <el-table-column label="CRM模块" min-width="170">
+                <template #default="{ row }">
+                  <el-select v-model="row.sourceModule" style="width:100%" filterable @change="handleTableFieldModuleChange(row)">
+                    <el-option v-for="item in crmModuleOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="CRM字段" min-width="240">
                 <template #default="{ row }">
                   <el-select v-model="row.sourceField" style="width:100%" filterable allow-create default-first-option @change="handleTableFieldSourceChange(row)">
-                    <el-option v-for="item in currentCrmFieldOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    <el-option v-for="item in tableFieldOptions(row)" :key="item.value" :label="item.label" :value="item.value" />
                   </el-select>
                 </template>
               </el-table-column>
@@ -665,6 +672,7 @@ const crmModuleOptions = [
 const fieldTypes = ['STRING', 'NUMBER', 'DATE', 'DATETIME', 'BOOLEAN', 'DECIMAL', 'JSON', 'ARRAY']
 const parameterModes = { SINGLE: '单值', TABLE: '表参数' }
 const defaultTableField = () => ({
+  sourceModule: '',
   sourceField: '',
   sourceFieldLabel: '',
   targetField: '',
@@ -976,11 +984,12 @@ async function submitMapping() {
 function handleMappingModuleChange() {
   mappingForm.value.sourceField = ''
   mappingForm.value.sourceFieldLabel = ''
-  mappingForm.value.tableFields = mappingForm.value.tableFields.map(row => ({
-    ...row,
-    sourceField: '',
-    sourceFieldLabel: ''
-  }))
+  if (mappingForm.value.parameterMode === 'TABLE') {
+    mappingForm.value.tableFields = mappingForm.value.tableFields.map(row => ({
+      ...row,
+      sourceModule: row.sourceModule || mappingForm.value.sourceModule || 'customer'
+    }))
+  }
 }
 
 function handleParameterModeChange(mode) {
@@ -999,7 +1008,10 @@ function handleMappingSourceFieldChange() {
 }
 
 function addTableField() {
-  mappingForm.value.tableFields.push(defaultTableField())
+  mappingForm.value.tableFields.push({
+    ...defaultTableField(),
+    sourceModule: mappingForm.value.sourceModule || 'customer'
+  })
 }
 
 function removeTableField(index) {
@@ -1007,7 +1019,8 @@ function removeTableField(index) {
 }
 
 function handleTableFieldSourceChange(row) {
-  const field = findCurrentCrmField(row.sourceField)
+  row.sourceModule = row.sourceModule || mappingForm.value.sourceModule || 'customer'
+  const field = findCrmField(row.sourceField, row.sourceModule)
   if (field) {
     row.sourceFieldLabel = field.label
     if (field.type === 'number') row.fieldType = 'NUMBER'
@@ -1016,10 +1029,16 @@ function handleTableFieldSourceChange(row) {
   }
 }
 
+function handleTableFieldModuleChange(row) {
+  row.sourceField = ''
+  row.sourceFieldLabel = ''
+}
+
 function normalizeMappingLabels() {
   if (mappingForm.value.parameterMode === 'TABLE') {
     mappingForm.value.tableFields.forEach(row => {
-      const field = findCurrentCrmField(row.sourceField)
+      row.sourceModule = row.sourceModule || mappingForm.value.sourceModule || 'customer'
+      const field = findCrmField(row.sourceField, row.sourceModule)
       if (field && !row.sourceFieldLabel) row.sourceFieldLabel = field.label
       if (!row.targetFieldLabel && row.targetField) row.targetFieldLabel = row.targetField
       if (!row.fieldType) row.fieldType = 'STRING'
@@ -1037,7 +1056,20 @@ function normalizeMappingLabels() {
 }
 
 function findCurrentCrmField(fieldKey) {
-  return (crmModuleFieldMap[mappingForm.value.sourceModule] || []).find(item => item.key === fieldKey)
+  return findCrmField(fieldKey, mappingForm.value.sourceModule)
+}
+
+function findCrmField(fieldKey, moduleKey) {
+  return (crmModuleFieldMap[moduleKey || 'customer'] || []).find(item => item.key === fieldKey)
+}
+
+function tableFieldOptions(row) {
+  const fields = crmModuleFieldMap[row.sourceModule || mappingForm.value.sourceModule || 'customer'] || []
+  return fields.map(item => ({
+    label: `${item.label} (${item.key})`,
+    value: item.key,
+    raw: item
+  }))
 }
 
 function buildMappingPayload() {
@@ -1045,6 +1077,7 @@ function buildMappingPayload() {
   if (mappingForm.value.parameterMode === 'TABLE') {
     const tableFields = normalizeTableFields(mappingForm.value.tableFields)
     const first = tableFields[0] || defaultTableField()
+    const modules = uniqueTableModules(tableFields)
     return {
       ...mappingForm.value,
       sourceField: first.sourceField || '__TABLE__',
@@ -1057,7 +1090,7 @@ function buildMappingPayload() {
       defaultValue: '',
       parameterMode: 'TABLE',
       mappingDirection: mappingForm.value.mappingDirection || 'OUTBOUND',
-      sourceModule: mappingForm.value.sourceModule || 'customer'
+      sourceModule: modules.length > 1 ? 'MULTI' : (modules[0] || mappingForm.value.sourceModule || 'customer')
     }
   }
   return {
@@ -1090,6 +1123,11 @@ function validateMappingPayload(payload) {
       ElMessage.warning(`第${invalidIndex + 1}行需要配置CRM字段和表内字段名`)
       return false
     }
+    const invalidModuleIndex = tableFields.findIndex(row => !row.sourceModule)
+    if (invalidModuleIndex >= 0) {
+      ElMessage.warning(`第${invalidModuleIndex + 1}行需要选择CRM模块`)
+      return false
+    }
     return true
   }
   if (!payload.sourceField) {
@@ -1117,6 +1155,7 @@ function parseTableFields(value) {
 function normalizeTableFields(rows) {
   return (rows || [])
     .map(row => ({
+      sourceModule: row.sourceModule || mappingForm.value.sourceModule || 'customer',
       sourceField: row.sourceField || '',
       sourceFieldLabel: row.sourceFieldLabel || '',
       targetField: row.targetField || '',
@@ -1134,6 +1173,7 @@ function buildLegacyTableFields(mapping) {
   if (!mapping.sourceField && !mapping.targetField) return []
   return [{
     ...defaultTableField(),
+    sourceModule: mapping.sourceModule || 'customer',
     sourceField: mapping.sourceField,
     sourceFieldLabel: mapping.sourceFieldLabel,
     targetField: mapping.targetField,
@@ -1154,7 +1194,18 @@ function mappingSourceFieldText(row) {
   if (row.parameterMode !== 'TABLE') return row.sourceFieldLabel || row.sourceField || '-'
   const fields = parseTableFields(row.tableFieldMappings)
   if (fields.length === 0) return row.sourceFieldLabel || row.sourceField || '-'
-  return `${fields.length}个字段：${fields.map(item => item.sourceFieldLabel || item.sourceField).join('、')}`
+  return `${fields.length}个字段：${fields.map(item => `${moduleLabel(item.sourceModule)}.${item.sourceFieldLabel || item.sourceField}`).join('、')}`
+}
+
+function mappingModuleText(row) {
+  if (row.parameterMode !== 'TABLE') return moduleLabel(row.sourceModule)
+  const modules = uniqueTableModules(parseTableFields(row.tableFieldMappings))
+  if (modules.length === 0) return moduleLabel(row.sourceModule)
+  return modules.map(moduleLabel).join('、')
+}
+
+function uniqueTableModules(fields) {
+  return [...new Set((fields || []).map(item => item.sourceModule).filter(Boolean))]
 }
 
 function mappingParameterLocation(row) {
@@ -1175,6 +1226,7 @@ function tableFieldText(row) {
 }
 
 function moduleLabel(value) {
+  if (value === 'MULTI') return '多个模块'
   return crmModuleOptions.find(item => item.value === value)?.label || value || '-'
 }
 
