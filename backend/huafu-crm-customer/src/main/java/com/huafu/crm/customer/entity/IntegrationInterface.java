@@ -22,6 +22,11 @@ public class IntegrationInterface {
     private String contentType;
     private Short enabled;
     private Integer retryLimit;
+    private String successRuleType;
+    private String successFieldPath;
+    private String successExpectedValues;
+    private String failureExpectedValues;
+    private String successMessagePath;
     private String description;
     private Long createdBy;
     private LocalDateTime createdTime;
@@ -57,6 +62,16 @@ public class IntegrationInterface {
     public void setEnabled(Short enabled) { this.enabled = enabled; }
     public Integer getRetryLimit() { return retryLimit; }
     public void setRetryLimit(Integer retryLimit) { this.retryLimit = retryLimit; }
+    public String getSuccessRuleType() { return successRuleType; }
+    public void setSuccessRuleType(String successRuleType) { this.successRuleType = successRuleType; }
+    public String getSuccessFieldPath() { return successFieldPath; }
+    public void setSuccessFieldPath(String successFieldPath) { this.successFieldPath = successFieldPath; }
+    public String getSuccessExpectedValues() { return successExpectedValues; }
+    public void setSuccessExpectedValues(String successExpectedValues) { this.successExpectedValues = successExpectedValues; }
+    public String getFailureExpectedValues() { return failureExpectedValues; }
+    public void setFailureExpectedValues(String failureExpectedValues) { this.failureExpectedValues = failureExpectedValues; }
+    public String getSuccessMessagePath() { return successMessagePath; }
+    public void setSuccessMessagePath(String successMessagePath) { this.successMessagePath = successMessagePath; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public Long getCreatedBy() { return createdBy; }

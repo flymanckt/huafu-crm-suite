@@ -16,6 +16,7 @@ public class IntegrationLog {
     private String status;
     private String requestPayload;
     private String responsePayload;
+    private String mappingDetail;
     private String errorMessage;
     private Integer retryCount;
     private LocalDateTime nextRetryTime;
@@ -42,6 +43,8 @@ public class IntegrationLog {
     public void setRequestPayload(String requestPayload) { this.requestPayload = requestPayload; }
     public String getResponsePayload() { return responsePayload; }
     public void setResponsePayload(String responsePayload) { this.responsePayload = responsePayload; }
+    public String getMappingDetail() { return mappingDetail; }
+    public void setMappingDetail(String mappingDetail) { this.mappingDetail = mappingDetail; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
     public Integer getRetryCount() { return retryCount; }
@@ -61,4 +64,3 @@ public class IntegrationLog {
     public Short getDeleted() { return deleted; }
     public void setDeleted(Short deleted) { this.deleted = deleted; }
 }
-

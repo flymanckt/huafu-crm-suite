@@ -18,5 +18,10 @@ public record IntegrationInterfaceDTO(
     @Size(max = 64) String contentType,
     Short enabled,
     Integer retryLimit,
+    @Size(max = 32) String successRuleType,
+    @Size(max = 256) String successFieldPath,
+    @Size(max = 500) String successExpectedValues,
+    @Size(max = 500) String failureExpectedValues,
+    @Size(max = 256) String successMessagePath,
     @Size(max = 500) String description
 ) {}

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huafu.crm.common.api.PageResult;
 import com.huafu.crm.common.context.UserContext;
@@ -27,6 +28,7 @@ import com.huafu.crm.customer.mapper.SapRfcConfigMapper;
 import com.huafu.crm.customer.service.IntegrationPlatformService;
 import com.huafu.crm.customer.service.sap.SapJcoResult;
 import com.huafu.crm.customer.service.sap.SapJcoService;
+import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -34,13 +36,19 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.xml.parsers.DocumentBuilderFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
 
 @Service
 public class IntegrationPlatformServiceImpl implements IntegrationPlatformService {
@@ -51,6 +59,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private static final Set<String> PARAMETER_MODES = Set.of("SINGLE", "TABLE");
     private static final Set<String> MAPPING_DIRECTIONS = Set.of("OUTBOUND", "INBOUND", "BIDIRECTIONAL");
     private static final Set<String> HTTP_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SAP_ODATA");
+    private static final Set<String> SUCCESS_RULE_TYPES = Set.of("AUTO", "HTTP_STATUS", "TEXT_CONTAINS", "JSON_FIELD", "XML_FIELD", "SAP_RETURN");
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final IntegrationConnectionConfigMapper connectionMapper;
@@ -339,6 +348,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         log.setStatus(StringUtils.hasText(dto.status()) ? InputSanitizer.safeText(dto.status()) : "PENDING");
         log.setRequestPayload(InputSanitizer.rejectUnsafeHtml(dto.requestPayload()));
         log.setResponsePayload(InputSanitizer.rejectUnsafeHtml(dto.responsePayload()));
+        log.setMappingDetail(InputSanitizer.rejectUnsafeHtml(dto.mappingDetail()));
         log.setErrorMessage(InputSanitizer.safeText(dto.errorMessage()));
         log.setRetryCount(0);
         log.setCreatedBy(currentUserId());
@@ -441,12 +451,16 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if (iface == null) {
             return ExecuteResult.failed("接口定义不存在或未启用：" + log.getInterfaceCode(), false);
         }
+        List<IntegrationFieldMapping> outboundMappings = listMappings(iface.getId()).stream()
+            .filter(mapping -> "OUTBOUND".equals(mapping.getMappingDirection()) || "BIDIRECTIONAL".equals(mapping.getMappingDirection()))
+            .toList();
+        updateMappingDetail(log.getId(), buildMappingDetail(log.getRequestPayload(), outboundMappings));
         String protocol = iface.getProtocol();
         if (HTTP_PROTOCOLS.contains(protocol)) {
             return executeHttp(iface, log);
         }
         if ("SAP_RFC".equals(protocol)) {
-            return executeSapRfc(iface, log);
+            return executeSapRfc(iface, log, outboundMappings);
         }
         return ExecuteResult.failed("接口协议暂未接入执行器：" + protocol, false);
     }
@@ -478,17 +492,18 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
                 .connectTimeout(Duration.ofMillis(connection.getTimeoutMs() == null ? 30000 : connection.getTimeoutMs()))
                 .build()
                 .send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            boolean ok = response.statusCode() >= 200 && response.statusCode() < 300;
             String responsePayload = toJson(Map.of("statusCode", response.statusCode(), "body", response.body()));
+            ResponseDecision decision = evaluateResponseSuccess(iface, responsePayload, response.statusCode());
+            boolean ok = decision.success();
             return ok
                 ? ExecuteResult.success(responsePayload)
-                : ExecuteResult.failed("HTTP调用失败，状态码：" + response.statusCode(), responsePayload, response.statusCode() >= 500);
+                : ExecuteResult.failed("接口返回判断为失败：" + decision.message(), responsePayload, response.statusCode() >= 500);
         } catch (Exception ex) {
             return ExecuteResult.failed("HTTP调用异常：" + ex.getMessage(), true);
         }
     }
 
-    private ExecuteResult executeSapRfc(IntegrationInterface iface, IntegrationLog log) {
+    private ExecuteResult executeSapRfc(IntegrationInterface iface, IntegrationLog log, List<IntegrationFieldMapping> mappings) {
         SapRfcConfig cfg = findSapConfig(iface.getConnectionCode());
         if (cfg == null) {
             return ExecuteResult.failed("SAP RFC配置不存在或未启用：" + iface.getConnectionCode(), false);
@@ -496,13 +511,309 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if (!StringUtils.hasText(iface.getSapFunctionName())) {
             return ExecuteResult.failed("接口定义缺少SAP RFC/BAPI函数名", false);
         }
-        List<IntegrationFieldMapping> mappings = listMappings(iface.getId()).stream()
-            .filter(mapping -> "OUTBOUND".equals(mapping.getMappingDirection()) || "BIDIRECTIONAL".equals(mapping.getMappingDirection()))
-            .toList();
         SapJcoResult result = sapJcoService.execute(cfg, iface, log, mappings);
-        return result.success()
+        if (!result.success()) {
+            return ExecuteResult.failed(result.errorMessage(), result.retryable());
+        }
+        ResponseDecision decision = evaluateResponseSuccess(iface, result.responsePayload(), null);
+        return decision.success()
             ? ExecuteResult.success(result.responsePayload())
-            : ExecuteResult.failed(result.errorMessage(), result.retryable());
+            : ExecuteResult.failed("接口返回判断为失败：" + decision.message(), result.responsePayload(), false);
+    }
+
+    private void updateMappingDetail(Long logId, String mappingDetail) {
+        logMapper.update(null, new LambdaUpdateWrapper<IntegrationLog>()
+            .eq(IntegrationLog::getId, logId)
+            .set(IntegrationLog::getMappingDetail, mappingDetail)
+            .set(IntegrationLog::getUpdatedBy, currentUserId())
+            .set(IntegrationLog::getUpdatedTime, LocalDateTime.now()));
+    }
+
+    private String buildMappingDetail(String requestPayload, List<IntegrationFieldMapping> mappings) {
+        try {
+            JsonNode root = StringUtils.hasText(requestPayload)
+                ? OBJECT_MAPPER.readTree(requestPayload)
+                : OBJECT_MAPPER.createObjectNode();
+            List<Map<String, Object>> details = new ArrayList<>();
+            for (IntegrationFieldMapping mapping : mappings) {
+                if ("TABLE".equals(mapping.getParameterMode())) {
+                    appendTableMappingDetail(details, root, mapping);
+                } else {
+                    ResolvedValue resolved = resolveMappingValue(root, mapping.getSourceField(), mapping.getDefaultValue(), 0);
+                    details.add(mappingDetailRow(mapping, null, null, resolved));
+                }
+            }
+            return OBJECT_MAPPER.writeValueAsString(details);
+        } catch (Exception ex) {
+            return toJson(List.of(Map.of("error", "字段映射明细生成失败：" + ex.getMessage())));
+        }
+    }
+
+    private void appendTableMappingDetail(List<Map<String, Object>> details, JsonNode root, IntegrationFieldMapping mapping) throws Exception {
+        if (!StringUtils.hasText(mapping.getTableFieldMappings())) {
+            return;
+        }
+        List<Map<String, Object>> rows = OBJECT_MAPPER.readValue(mapping.getTableFieldMappings(), TABLE_FIELD_LIST_TYPE);
+        int rowCount = Math.max(1, inferTableRowCount(root, rows));
+        for (int i = 0; i < rowCount; i++) {
+            for (Map<String, Object> row : rows) {
+                String sourceField = stringValue(row.get("sourceField"));
+                String defaultValue = stringValue(row.get("defaultValue"));
+                ResolvedValue resolved = resolveMappingValue(root, sourceField, defaultValue, i);
+                details.add(mappingDetailRow(mapping, row, i, resolved));
+            }
+        }
+    }
+
+    private Map<String, Object> mappingDetailRow(
+        IntegrationFieldMapping mapping,
+        Map<String, Object> tableField,
+        Integer rowIndex,
+        ResolvedValue resolved
+    ) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        boolean tableMode = tableField != null;
+        row.put("mappingId", mapping.getId());
+        row.put("parameterMode", mapping.getParameterMode());
+        row.put("parameterGroup", mapping.getParameterGroup());
+        row.put("mappingDirection", mapping.getMappingDirection());
+        row.put("rowIndex", rowIndex);
+        row.put("sourceModule", tableMode ? stringValue(tableField.get("sourceModule")) : mapping.getSourceModule());
+        row.put("sourceField", tableMode ? stringValue(tableField.get("sourceField")) : mapping.getSourceField());
+        row.put("sourceFieldLabel", tableMode ? stringValue(tableField.get("sourceFieldLabel")) : mapping.getSourceFieldLabel());
+        row.put("targetField", tableMode ? stringValue(tableField.get("targetField")) : mapping.getTargetField());
+        row.put("targetFieldLabel", tableMode ? stringValue(tableField.get("targetFieldLabel")) : mapping.getTargetFieldLabel());
+        row.put("fieldType", tableMode ? stringValue(tableField.get("fieldType")) : mapping.getFieldType());
+        row.put("required", tableMode ? tableField.get("required") : mapping.getRequired());
+        row.put("defaultValue", tableMode ? stringValue(tableField.get("defaultValue")) : mapping.getDefaultValue());
+        row.put("transformRule", tableMode ? stringValue(tableField.get("transformRule")) : mapping.getTransformRule());
+        row.put("value", resolved.value());
+        row.put("usedDefault", resolved.usedDefault());
+        row.put("missing", resolved.missing());
+        return row;
+    }
+
+    private int inferTableRowCount(JsonNode root, List<Map<String, Object>> rows) {
+        int count = 0;
+        for (Map<String, Object> row : rows) {
+            String path = stringValue(row.get("sourceField"));
+            int arrayMarker = path == null ? -1 : normalizeSourceField(path).indexOf("[].");
+            if (arrayMarker <= 0) {
+                continue;
+            }
+            JsonNode array = root.path(normalizeSourceField(path).substring(0, arrayMarker));
+            if (array.isArray()) {
+                count = Math.max(count, array.size());
+            }
+        }
+        return count;
+    }
+
+    private ResolvedValue resolveMappingValue(JsonNode root, String sourceField, String defaultValue, int rowIndex) {
+        if (!StringUtils.hasText(sourceField)) {
+            return new ResolvedValue(StringUtils.hasText(defaultValue) ? defaultValue : null, StringUtils.hasText(defaultValue), true);
+        }
+        JsonNode node = resolveJsonPath(root, sourceField, rowIndex);
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return new ResolvedValue(StringUtils.hasText(defaultValue) ? defaultValue : null, StringUtils.hasText(defaultValue), true);
+        }
+        Object value;
+        if (node.isNumber()) {
+            value = node.numberValue();
+        } else if (node.isBoolean()) {
+            value = node.booleanValue();
+        } else if (node.isContainerNode()) {
+            value = node.toString();
+        } else {
+            value = node.asText();
+        }
+        return new ResolvedValue(value, false, false);
+    }
+
+    private JsonNode resolveJsonPath(JsonNode root, String sourceField, int rowIndex) {
+        String normalized = normalizeSourceField(sourceField);
+        JsonNode node = root;
+        for (String part : normalized.split("\\.")) {
+            if (!StringUtils.hasText(part)) {
+                continue;
+            }
+            if (part.endsWith("[]")) {
+                String arrayName = part.substring(0, part.length() - 2);
+                node = node.path(arrayName);
+                if (!node.isArray()) {
+                    return null;
+                }
+                node = node.path(Math.min(rowIndex, Math.max(0, node.size() - 1)));
+            } else {
+                node = node.path(part);
+            }
+        }
+        return node;
+    }
+
+    private String normalizeSourceField(String sourceField) {
+        if (sourceField.startsWith("customerSapInfo.")) {
+            return "sapInfos[]." + sourceField.substring(sourceField.indexOf('.') + 1);
+        }
+        if (sourceField.startsWith("sapInfo.")) {
+            return "sapInfo." + sourceField.substring(sourceField.indexOf('.') + 1);
+        }
+        if (sourceField.startsWith("customerSapOrg.")) {
+            return "sapOrgs[]." + sourceField.substring(sourceField.indexOf('.') + 1);
+        }
+        return sourceField;
+    }
+
+    private ResponseDecision evaluateResponseSuccess(IntegrationInterface iface, String responsePayload, Integer httpStatus) {
+        String type = StringUtils.hasText(iface.getSuccessRuleType()) ? iface.getSuccessRuleType() : "AUTO";
+        String message = resolveResponseMessage(responsePayload, iface.getSuccessMessagePath());
+        if ("HTTP_STATUS".equals(type) || ("AUTO".equals(type) && HTTP_PROTOCOLS.contains(iface.getProtocol()) && !"SAP_ODATA".equals(iface.getProtocol()))) {
+            boolean success = httpStatus != null && httpStatus >= 200 && httpStatus < 300;
+            return new ResponseDecision(success, StringUtils.hasText(message) ? message : "HTTP状态码：" + httpStatus);
+        }
+        if ("TEXT_CONTAINS".equals(type)) {
+            return evaluateTextContains(responsePayload, iface, message);
+        }
+        if ("JSON_FIELD".equals(type)) {
+            return evaluateFieldValue(resolveJsonResponseValue(responsePayload, iface.getSuccessFieldPath()), iface, message);
+        }
+        if ("XML_FIELD".equals(type)) {
+            return evaluateFieldValue(resolveXmlFieldValue(responsePayload, iface.getSuccessFieldPath()), iface, message);
+        }
+        if ("SAP_RETURN".equals(type) || ("AUTO".equals(type) && "SAP_RFC".equals(iface.getProtocol()))) {
+            return evaluateSapReturn(responsePayload, iface, message);
+        }
+        boolean success = httpStatus == null || httpStatus >= 200 && httpStatus < 300;
+        return new ResponseDecision(success, StringUtils.hasText(message) ? message : "AUTO规则判断：" + (success ? "成功" : "失败"));
+    }
+
+    private ResponseDecision evaluateTextContains(String responsePayload, IntegrationInterface iface, String message) {
+        String payload = responsePayload == null ? "" : responsePayload;
+        for (String value : splitValues(iface.getFailureExpectedValues())) {
+            if (payload.contains(value)) {
+                return new ResponseDecision(false, StringUtils.hasText(message) ? message : "返回包含失败关键字：" + value);
+            }
+        }
+        List<String> successValues = splitValues(iface.getSuccessExpectedValues());
+        if (successValues.isEmpty()) {
+            return new ResponseDecision(false, StringUtils.hasText(message) ? message : "未配置成功关键字");
+        }
+        for (String value : successValues) {
+            if (payload.contains(value)) {
+                return new ResponseDecision(true, StringUtils.hasText(message) ? message : "返回包含成功关键字：" + value);
+            }
+        }
+        return new ResponseDecision(false, StringUtils.hasText(message) ? message : "返回未包含成功关键字");
+    }
+
+    private ResponseDecision evaluateFieldValue(String actualValue, IntegrationInterface iface, String message) {
+        if (!StringUtils.hasText(actualValue)) {
+            return new ResponseDecision(false, StringUtils.hasText(message) ? message : "未找到成功判断字段：" + iface.getSuccessFieldPath());
+        }
+        for (String value : splitValues(iface.getFailureExpectedValues())) {
+            if (actualValue.equalsIgnoreCase(value)) {
+                return new ResponseDecision(false, StringUtils.hasText(message) ? message : "返回字段命中失败值：" + actualValue);
+            }
+        }
+        List<String> successValues = splitValues(iface.getSuccessExpectedValues());
+        if (successValues.isEmpty()) {
+            return new ResponseDecision(true, StringUtils.hasText(message) ? message : "返回字段值：" + actualValue);
+        }
+        boolean success = successValues.stream().anyMatch(value -> actualValue.equalsIgnoreCase(value));
+        return new ResponseDecision(success, StringUtils.hasText(message) ? message : "返回字段值：" + actualValue);
+    }
+
+    private ResponseDecision evaluateSapReturn(String responsePayload, IntegrationInterface iface, String message) {
+        List<String> failureValues = splitValues(StringUtils.hasText(iface.getFailureExpectedValues()) ? iface.getFailureExpectedValues() : "E,A,X");
+        List<String> successValues = splitValues(StringUtils.hasText(iface.getSuccessExpectedValues()) ? iface.getSuccessExpectedValues() : "S");
+        List<String> returnTypes = resolveXmlFieldValues(responsePayload, StringUtils.hasText(iface.getSuccessFieldPath()) ? iface.getSuccessFieldPath() : "TYPE");
+        for (String type : returnTypes) {
+            if (failureValues.stream().anyMatch(value -> type.equalsIgnoreCase(value))) {
+                return new ResponseDecision(false, StringUtils.hasText(message) ? message : "SAP RETURN TYPE=" + type);
+            }
+        }
+        if (returnTypes.isEmpty()) {
+            return new ResponseDecision(true, StringUtils.hasText(message) ? message : "SAP未返回失败消息");
+        }
+        boolean success = returnTypes.stream().anyMatch(type -> successValues.stream().anyMatch(value -> type.equalsIgnoreCase(value)));
+        return new ResponseDecision(success, StringUtils.hasText(message) ? message : "SAP RETURN TYPE=" + String.join(",", returnTypes));
+    }
+
+    private String resolveResponseMessage(String responsePayload, String messagePath) {
+        if (!StringUtils.hasText(messagePath)) {
+            return null;
+        }
+        String value = resolveJsonResponseValue(responsePayload, messagePath);
+        if (StringUtils.hasText(value)) {
+            return value;
+        }
+        return resolveXmlFieldValue(responsePayload, messagePath);
+    }
+
+    private String resolveJsonResponseValue(String responsePayload, String path) {
+        if (!StringUtils.hasText(responsePayload) || !StringUtils.hasText(path)) {
+            return null;
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(responsePayload);
+            JsonNode node = resolveJsonPath(root, path, 0);
+            if (node != null && !node.isMissingNode() && !node.isNull()) {
+                return node.isContainerNode() ? node.toString() : node.asText();
+            }
+            JsonNode body = root.path("body");
+            if (body.isTextual()) {
+                JsonNode bodyRoot = OBJECT_MAPPER.readTree(body.asText());
+                String bodyPath = path.startsWith("body.") ? path.substring("body.".length()) : path;
+                JsonNode bodyNode = resolveJsonPath(bodyRoot, bodyPath, 0);
+                if (bodyNode != null && !bodyNode.isMissingNode() && !bodyNode.isNull()) {
+                    return bodyNode.isContainerNode() ? bodyNode.toString() : bodyNode.asText();
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private String resolveXmlFieldValue(String responsePayload, String path) {
+        List<String> values = resolveXmlFieldValues(responsePayload, path);
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    private List<String> resolveXmlFieldValues(String responsePayload, String path) {
+        if (!StringUtils.hasText(responsePayload) || !StringUtils.hasText(path)) {
+            return List.of();
+        }
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setExpandEntityReferences(false);
+            Document document = factory.newDocumentBuilder()
+                .parse(new ByteArrayInputStream(responsePayload.getBytes(StandardCharsets.UTF_8)));
+            String tagName = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+            tagName = tagName.replace("[]", "");
+            NodeList nodes = document.getElementsByTagName(tagName);
+            List<String> values = new ArrayList<>();
+            for (int i = 0; i < nodes.getLength(); i++) {
+                String value = nodes.item(i).getTextContent();
+                if (StringUtils.hasText(value)) {
+                    values.add(value.trim());
+                }
+            }
+            return values;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private List<String> splitValues(String value) {
+        if (!StringUtils.hasText(value)) {
+            return List.of();
+        }
+        return Arrays.stream(value.split("[,|，]"))
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .toList();
     }
 
     private IntegrationInterface findEnabledInterface(String interfaceCode) {
@@ -591,6 +902,10 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         }
     }
 
+    private record ResolvedValue(Object value, boolean usedDefault, boolean missing) {}
+
+    private record ResponseDecision(boolean success, String message) {}
+
     private SapRfcConfig toSapConfig(SapRfcConfigDTO dto, SapRfcConfig entity) {
         entity.setConfigCode(InputSanitizer.safeText(dto.configCode()));
         entity.setConfigName(InputSanitizer.safeText(dto.configName()));
@@ -622,14 +937,26 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         entity.setContentType(InputSanitizer.safeText(dto.contentType()));
         entity.setEnabled(dto.enabled() == null ? (short) 1 : dto.enabled());
         entity.setRetryLimit(dto.retryLimit() == null ? 3 : dto.retryLimit());
+        entity.setSuccessRuleType(StringUtils.hasText(dto.successRuleType()) ? InputSanitizer.safeText(dto.successRuleType()) : "AUTO");
+        entity.setSuccessFieldPath(InputSanitizer.safeText(dto.successFieldPath()));
+        entity.setSuccessExpectedValues(InputSanitizer.safeText(dto.successExpectedValues()));
+        entity.setFailureExpectedValues(InputSanitizer.safeText(dto.failureExpectedValues()));
+        entity.setSuccessMessagePath(InputSanitizer.safeText(dto.successMessagePath()));
         entity.setDescription(InputSanitizer.safeText(dto.description()));
         return entity;
     }
 
     private void validateInterfaceConfig(IntegrationInterfaceDTO dto) {
         String protocol = StringUtils.hasText(dto.protocol()) ? dto.protocol().trim() : "";
+        String successRuleType = StringUtils.hasText(dto.successRuleType()) ? dto.successRuleType().trim() : "AUTO";
         if (!SAP_PROTOCOLS.contains(protocol) && !GENERIC_PROTOCOLS.contains(protocol)) {
             throw new BizException(1001, "不支持的接口协议：" + dto.protocol());
+        }
+        if (!SUCCESS_RULE_TYPES.contains(successRuleType)) {
+            throw new BizException(1001, "不支持的成功判断规则：" + dto.successRuleType());
+        }
+        if (("JSON_FIELD".equals(successRuleType) || "XML_FIELD".equals(successRuleType)) && !StringUtils.hasText(dto.successFieldPath())) {
+            throw new BizException(1001, "字段规则需要填写成功判断字段路径");
         }
         if (!StringUtils.hasText(dto.connectionCode())) {
             throw new BizException(1001, SAP_PROTOCOLS.contains(protocol) ? "SAP接口需要选择SAP连接配置" : "通用接口需要选择连接配置");

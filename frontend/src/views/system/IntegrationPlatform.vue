@@ -160,8 +160,9 @@
             </el-table-column>
             <el-table-column prop="retryCount" label="重试" width="80" />
             <el-table-column prop="errorMessage" label="异常" min-width="260" show-overflow-tooltip />
-            <el-table-column label="操作" width="150" fixed="right">
+            <el-table-column label="操作" width="190" fixed="right">
               <template #default="{ row }">
+                <el-button link @click="openLogDetail(row)">详情</el-button>
                 <el-button link type="primary" :disabled="row.status === 'SUCCESS' || row.status === 'RUNNING'" @click="handleExecute(row)">立即推送</el-button>
                 <el-button link type="warning" :disabled="row.status === 'SUCCESS' || row.status === 'RUNNING'" @click="handleRepush(row)">重推</el-button>
               </template>
@@ -328,6 +329,33 @@
 
           <el-col :span="12"><el-form-item label="重试次数"><el-input-number v-model="interfaceForm.retryLimit" :min="0" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="启用"><el-switch v-model="interfaceForm.enabled" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="成功判断">
+              <el-select v-model="interfaceForm.successRuleType" style="width:100%">
+                <el-option v-for="item in successRuleTypes" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="消息字段">
+              <el-input v-model="interfaceForm.successMessagePath" placeholder="返回消息字段，如 body.message / MESSAGE" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="['JSON_FIELD','XML_FIELD','SAP_RETURN'].includes(interfaceForm.successRuleType)" :span="12">
+            <el-form-item label="判断字段">
+              <el-input v-model="interfaceForm.successFieldPath" placeholder="如 body.code / RETURN.TYPE / TYPE" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="interfaceForm.successRuleType !== 'HTTP_STATUS' && interfaceForm.successRuleType !== 'AUTO'" :span="12">
+            <el-form-item label="成功值/关键字">
+              <el-input v-model="interfaceForm.successExpectedValues" placeholder="多个用逗号分隔，如 S,0,success" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="interfaceForm.successRuleType !== 'HTTP_STATUS'" :span="12">
+            <el-form-item label="失败值/关键字">
+              <el-input v-model="interfaceForm.failureExpectedValues" placeholder="多个用逗号分隔，如 E,A,X,error" />
+            </el-form-item>
+          </el-col>
           <el-col :span="24"><el-form-item label="说明"><el-input v-model="interfaceForm.description" type="textarea" :rows="2" /></el-form-item></el-col>
         </el-row>
       </el-form>
@@ -486,6 +514,45 @@
       </el-form>
       <template #footer><el-button @click="mappingDialog=false">取消</el-button><el-button type="primary" @click="submitMapping">保存</el-button></template>
     </el-dialog>
+
+    <el-dialog v-model="logDetailDialog" title="接口推送日志详情" width="1080px" class="log-detail-dialog">
+      <el-descriptions :column="3" border size="small" class="log-summary">
+        <el-descriptions-item label="接口">{{ logDetail.interfaceCode }}</el-descriptions-item>
+        <el-descriptions-item label="业务键">{{ logDetail.businessKey }}</el-descriptions-item>
+        <el-descriptions-item label="状态"><el-tag :type="statusType(logDetail.status)">{{ logDetail.status }}</el-tag></el-descriptions-item>
+        <el-descriptions-item label="时间">{{ logDetail.createdTime }}</el-descriptions-item>
+        <el-descriptions-item label="重试">{{ logDetail.retryCount || 0 }}</el-descriptions-item>
+        <el-descriptions-item label="异常">{{ logDetail.errorMessage || '-' }}</el-descriptions-item>
+      </el-descriptions>
+      <el-tabs class="log-detail-tabs">
+        <el-tab-pane label="字段映射明细">
+          <el-table :data="logMappingDetails" border size="small" max-height="420">
+            <el-table-column prop="parameterMode" label="模式" width="90" />
+            <el-table-column prop="parameterGroup" label="参数/表名" min-width="130" show-overflow-tooltip />
+            <el-table-column label="行号" width="70">
+              <template #default="{ row }">{{ row.rowIndex == null ? '-' : row.rowIndex + 1 }}</template>
+            </el-table-column>
+            <el-table-column label="CRM字段" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.sourceFieldLabel || row.sourceField }}</template>
+            </el-table-column>
+            <el-table-column label="接口字段" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.targetFieldLabel || row.targetField }}</template>
+            </el-table-column>
+            <el-table-column label="推送值" min-width="240" show-overflow-tooltip>
+              <template #default="{ row }">{{ formatLogValue(row.value) }}</template>
+            </el-table-column>
+            <el-table-column label="默认值" width="90">
+              <template #default="{ row }"><el-tag v-if="row.usedDefault" type="warning" size="small">是</el-tag><span v-else>否</span></template>
+            </el-table-column>
+            <el-table-column label="缺失" width="80">
+              <template #default="{ row }"><el-tag v-if="row.missing" type="danger" size="small">是</el-tag><span v-else>否</span></template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="请求报文"><pre class="payload-view">{{ prettyPayload(logDetail.requestPayload) }}</pre></el-tab-pane>
+        <el-tab-pane label="接口返回"><pre class="payload-view">{{ prettyPayload(logDetail.responsePayload) }}</pre></el-tab-pane>
+      </el-tabs>
+    </el-dialog>
   </div>
 </template>
 
@@ -538,9 +605,31 @@ const connectionDialog = ref(false)
 const sapDialog = ref(false)
 const interfaceDialog = ref(false)
 const mappingDialog = ref(false)
+const logDetailDialog = ref(false)
+const logDetail = ref({})
 const defaultConnection = () => ({ connectionCode: '', connectionName: '', connectionType: 'REST', enabled: 1, baseUrl: '', authType: 'NONE', authConfig: '', headerConfig: '', timeoutMs: 30000, remark: '' })
 const defaultSap = () => ({ configCode: 'SAP_PRD', configName: 'SAP生产环境', enabled: 1, appServerHost: '', systemNumber: '00', client: '800', userName: '', passwordCipher: '', language: 'ZH', poolCapacity: 5, peakLimit: 10, connectionTimeout: 30000, remark: '' })
-const defaultInterface = () => ({ interfaceCode: '', interfaceName: '', systemCode: 'SAP', connectionCode: '', protocol: 'SAP_RFC', direction: 'OUTBOUND', businessModule: '', sapFunctionName: '', httpMethod: 'POST', endpointPath: '', contentType: 'application/json', enabled: 1, retryLimit: 3, description: '' })
+const defaultInterface = () => ({
+  interfaceCode: '',
+  interfaceName: '',
+  systemCode: 'SAP',
+  connectionCode: '',
+  protocol: 'SAP_RFC',
+  direction: 'OUTBOUND',
+  businessModule: '',
+  sapFunctionName: '',
+  httpMethod: 'POST',
+  endpointPath: '',
+  contentType: 'application/json',
+  enabled: 1,
+  retryLimit: 3,
+  successRuleType: 'AUTO',
+  successFieldPath: '',
+  successExpectedValues: '',
+  failureExpectedValues: '',
+  successMessagePath: '',
+  description: ''
+})
 const defaultMapping = () => ({
   interfaceId: null,
   parameterMode: 'SINGLE',
@@ -675,6 +764,14 @@ const crmModuleOptions = [
 ]
 const fieldTypes = ['STRING', 'NUMBER', 'DATE', 'DATETIME', 'BOOLEAN', 'DECIMAL', 'JSON', 'ARRAY']
 const parameterModes = { SINGLE: '单值', TABLE: '表参数' }
+const successRuleTypes = [
+  { label: '自动判断', value: 'AUTO' },
+  { label: 'HTTP状态码 2xx', value: 'HTTP_STATUS' },
+  { label: '返回文本包含关键字', value: 'TEXT_CONTAINS' },
+  { label: 'JSON字段等于指定值', value: 'JSON_FIELD' },
+  { label: 'XML字段等于指定值', value: 'XML_FIELD' },
+  { label: 'SAP RETURN消息', value: 'SAP_RETURN' }
+]
 const defaultTableField = () => ({
   sourceModule: '',
   sourceField: '',
@@ -757,6 +854,7 @@ const currentCrmFieldOptions = computed(() => {
     raw: item
   }))
 })
+const logMappingDetails = computed(() => parseJsonArray(logDetail.value.mappingDetail))
 
 async function loadConnections() {
   loading.value = true
@@ -904,6 +1002,7 @@ function applyProtocolDefaults(resetProtocolFields) {
 
 function buildInterfacePayload() {
   const payload = { ...interfaceForm.value }
+  payload.successRuleType = payload.successRuleType || 'AUTO'
   if (sapProtocols.includes(payload.protocol)) {
     payload.systemCode = payload.systemCode || 'SAP'
     if (payload.protocol === 'SAP_RFC') {
@@ -934,14 +1033,28 @@ function validateInterfacePayload(payload) {
       ElMessage.warning('请填写SAP函数、BAPI或IDoc消息类型')
       return false
     }
-    if (payload.protocol === 'SAP_ODATA' && (!payload.sapFunctionName || !payload.endpointPath)) {
+  if (payload.protocol === 'SAP_ODATA' && (!payload.sapFunctionName || !payload.endpointPath)) {
       ElMessage.warning('请填写OData对象和OData路径')
       return false
     }
+    if (!validateSuccessRule(payload)) return false
     return true
   }
   if (!payload.httpMethod || !payload.endpointPath) {
     ElMessage.warning('请填写HTTP方法和接口路径')
+    return false
+  }
+  if (!validateSuccessRule(payload)) return false
+  return true
+}
+
+function validateSuccessRule(payload) {
+  if (['JSON_FIELD', 'XML_FIELD'].includes(payload.successRuleType) && !payload.successFieldPath) {
+    ElMessage.warning('字段判断规则需要填写判断字段路径')
+    return false
+  }
+  if (payload.successRuleType === 'TEXT_CONTAINS' && !payload.successExpectedValues) {
+    ElMessage.warning('文本关键字规则需要填写成功值/关键字')
     return false
   }
   return true
@@ -1258,6 +1371,38 @@ async function handleExecutePending() {
   loadLogs()
 }
 
+function openLogDetail(row) {
+  logDetail.value = row || {}
+  logDetailDialog.value = true
+}
+
+function parseJsonArray(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function prettyPayload(value) {
+  if (!value) return ''
+  if (typeof value !== 'string') return JSON.stringify(value, null, 2)
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+function formatLogValue(value) {
+  if (value === null || value === undefined || value === '') return '-'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
 function statusType(status) {
   if (status === 'SUCCESS') return 'success'
   if (status === 'FAILED') return 'danger'
@@ -1280,4 +1425,21 @@ onMounted(() => {
 .interface-dialog :deep(.el-radio-button__inner) { min-width: 92px; }
 .table-field-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:600; color:#303133; }
 .table-field-editor { margin-bottom:14px; }
+.log-summary { margin-bottom: 12px; }
+.log-detail-tabs { margin-top: 8px; }
+.payload-view {
+  min-height: 260px;
+  max-height: 480px;
+  overflow: auto;
+  padding: 12px;
+  margin: 0;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #f7f8fa;
+  color: #303133;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 </style>

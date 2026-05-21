@@ -11,6 +11,6 @@ public record IntegrationLogCreateDTO(
     @Size(max = 32) String status,
     String requestPayload,
     String responsePayload,
+    String mappingDetail,
     String errorMessage
 ) {}
-
