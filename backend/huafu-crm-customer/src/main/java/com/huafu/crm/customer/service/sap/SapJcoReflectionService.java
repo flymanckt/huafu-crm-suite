@@ -147,7 +147,7 @@ public class SapJcoReflectionService implements SapJcoService {
             if ("TABLE".equals(mapping.getParameterMode())) {
                 applySapTableMapping(function, mapping, root);
             } else {
-                Object value = resolveMappingValue(root, mapping.getSourceField(), mapping.getDefaultValue(), 0);
+                Object value = resolveMappingValue(root, mapping.getSourceModule(), mapping.getSourceField(), mapping.getDefaultValue(), 0);
                 if (value != null && StringUtils.hasText(mapping.getTargetField())) {
                     setSapParameter(function, mapping.getTargetField(), value);
                 }
@@ -176,7 +176,13 @@ public class SapJcoReflectionService implements SapJcoService {
                 if (!StringUtils.hasText(targetField)) {
                     continue;
                 }
-                Object value = resolveMappingValue(root, stringValue(row.get("sourceField")), stringValue(row.get("defaultValue")), i);
+                Object value = resolveMappingValue(
+                    root,
+                    stringValue(row.get("sourceModule")),
+                    stringValue(row.get("sourceField")),
+                    stringValue(row.get("defaultValue")),
+                    i
+                );
                 if (value != null) {
                     table.getClass().getMethod("setValue", String.class, Object.class).invoke(table, targetField, value);
                 }
@@ -188,13 +194,16 @@ public class SapJcoReflectionService implements SapJcoService {
         int count = 0;
         for (Map<String, Object> row : rows) {
             String path = stringValue(row.get("sourceField"));
-            int arrayMarker = path == null ? -1 : path.indexOf("[].");
-            if (arrayMarker <= 0) {
-                continue;
-            }
-            JsonNode array = root.path(path.substring(0, arrayMarker));
-            if (array.isArray()) {
-                count = Math.max(count, array.size());
+            for (String candidate : sourcePathCandidates(stringValue(row.get("sourceModule")), path)) {
+                int arrayMarker = candidate.indexOf("[].");
+                if (arrayMarker <= 0) {
+                    continue;
+                }
+                JsonNode array = resolveJsonPath(root, candidate.substring(0, arrayMarker), 0);
+                if (array != null && array.isArray()) {
+                    count = Math.max(count, array.size());
+                    break;
+                }
             }
         }
         return count;
@@ -212,11 +221,11 @@ public class SapJcoReflectionService implements SapJcoService {
         }
     }
 
-    private Object resolveMappingValue(JsonNode root, String sourceField, String defaultValue, int rowIndex) {
+    private Object resolveMappingValue(JsonNode root, String sourceModule, String sourceField, String defaultValue, int rowIndex) {
         if (!StringUtils.hasText(sourceField)) {
             return StringUtils.hasText(defaultValue) ? defaultValue : null;
         }
-        JsonNode node = resolveJsonPath(root, sourceField, rowIndex);
+        JsonNode node = resolveSourceValue(root, sourceModule, sourceField, rowIndex);
         if (node == null || node.isMissingNode() || node.isNull()) {
             return StringUtils.hasText(defaultValue) ? defaultValue : null;
         }
@@ -229,13 +238,17 @@ public class SapJcoReflectionService implements SapJcoService {
         return node.asText();
     }
 
-    private JsonNode resolveJsonPath(JsonNode root, String sourceField, int rowIndex) {
-        String normalized = sourceField;
-        if (sourceField.startsWith("customerSapInfo.") || sourceField.startsWith("sapInfo.")) {
-            normalized = "sapInfo." + sourceField.substring(sourceField.indexOf('.') + 1);
-        } else if (sourceField.startsWith("customerSapOrg.")) {
-            normalized = "sapOrgs[]." + sourceField.substring(sourceField.indexOf('.') + 1);
+    private JsonNode resolveSourceValue(JsonNode root, String sourceModule, String sourceField, int rowIndex) {
+        for (String candidate : sourcePathCandidates(sourceModule, sourceField)) {
+            JsonNode node = resolveJsonPath(root, candidate, rowIndex);
+            if (node != null && !node.isMissingNode() && !node.isNull()) {
+                return node;
+            }
         }
+        return null;
+    }
+
+    private JsonNode resolveJsonPath(JsonNode root, String normalized, int rowIndex) {
         JsonNode node = root;
         for (String part : normalized.split("\\.")) {
             if (!StringUtils.hasText(part)) {
@@ -253,6 +266,48 @@ public class SapJcoReflectionService implements SapJcoService {
             }
         }
         return node;
+    }
+
+    private List<String> sourcePathCandidates(String sourceModule, String sourceField) {
+        if (!StringUtils.hasText(sourceField)) {
+            return List.of();
+        }
+        List<String> candidates = new java.util.ArrayList<>();
+        String normalized = normalizeSourceField(sourceModule, sourceField);
+        candidates.add(normalized);
+        if (!normalized.equals(sourceField)) {
+            candidates.add(sourceField);
+        }
+        if ("customerSapInfo".equals(sourceModule) && normalized.startsWith("sapInfos[].")) {
+            candidates.add("sapInfo." + normalized.substring("sapInfos[].".length()));
+        }
+        return candidates;
+    }
+
+    private String normalizeSourceField(String sourceModule, String sourceField) {
+        if (sourceField.startsWith("customer.")
+            || sourceField.startsWith("sapInfo.")
+            || sourceField.startsWith("sapInfos[].")
+            || sourceField.startsWith("sapOrgs[].")
+            || sourceField.startsWith("payload.")) {
+            return sourceField;
+        }
+        if (sourceField.startsWith("customerSapInfo.")) {
+            return "sapInfos[]." + sourceField.substring(sourceField.indexOf('.') + 1);
+        }
+        if (sourceField.startsWith("customerSapOrg.")) {
+            return "sapOrgs[]." + sourceField.substring(sourceField.indexOf('.') + 1);
+        }
+        if ("customer".equals(sourceModule)) {
+            return "customer." + sourceField;
+        }
+        if ("customerSapInfo".equals(sourceModule)) {
+            return "sapInfos[]." + sourceField;
+        }
+        if ("customerSapOrg".equals(sourceModule)) {
+            return "sapOrgs[]." + sourceField;
+        }
+        return sourceField;
     }
 
     private Object invokeNoArg(Object target, String methodName) throws Exception {

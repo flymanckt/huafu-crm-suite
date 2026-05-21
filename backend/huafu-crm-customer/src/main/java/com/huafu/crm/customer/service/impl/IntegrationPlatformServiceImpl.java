@@ -541,7 +541,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
                 if ("TABLE".equals(mapping.getParameterMode())) {
                     appendTableMappingDetail(details, root, mapping);
                 } else {
-                    ResolvedValue resolved = resolveMappingValue(root, mapping.getSourceField(), mapping.getDefaultValue(), 0);
+                    ResolvedValue resolved = resolveMappingValue(root, mapping.getSourceModule(), mapping.getSourceField(), mapping.getDefaultValue(), 0);
                     details.add(mappingDetailRow(mapping, null, null, resolved));
                 }
             }
@@ -561,7 +561,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             for (Map<String, Object> row : rows) {
                 String sourceField = stringValue(row.get("sourceField"));
                 String defaultValue = stringValue(row.get("defaultValue"));
-                ResolvedValue resolved = resolveMappingValue(root, sourceField, defaultValue, i);
+                ResolvedValue resolved = resolveMappingValue(root, stringValue(row.get("sourceModule")), sourceField, defaultValue, i);
                 details.add(mappingDetailRow(mapping, row, i, resolved));
             }
         }
@@ -599,23 +599,26 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         int count = 0;
         for (Map<String, Object> row : rows) {
             String path = stringValue(row.get("sourceField"));
-            int arrayMarker = path == null ? -1 : normalizeSourceField(path).indexOf("[].");
-            if (arrayMarker <= 0) {
-                continue;
-            }
-            JsonNode array = root.path(normalizeSourceField(path).substring(0, arrayMarker));
-            if (array.isArray()) {
-                count = Math.max(count, array.size());
+            for (String candidate : sourcePathCandidates(stringValue(row.get("sourceModule")), path)) {
+                int arrayMarker = candidate.indexOf("[].");
+                if (arrayMarker <= 0) {
+                    continue;
+                }
+                JsonNode array = resolveJsonPath(root, candidate.substring(0, arrayMarker), 0);
+                if (array != null && array.isArray()) {
+                    count = Math.max(count, array.size());
+                    break;
+                }
             }
         }
         return count;
     }
 
-    private ResolvedValue resolveMappingValue(JsonNode root, String sourceField, String defaultValue, int rowIndex) {
+    private ResolvedValue resolveMappingValue(JsonNode root, String sourceModule, String sourceField, String defaultValue, int rowIndex) {
         if (!StringUtils.hasText(sourceField)) {
             return new ResolvedValue(StringUtils.hasText(defaultValue) ? defaultValue : null, StringUtils.hasText(defaultValue), true);
         }
-        JsonNode node = resolveJsonPath(root, sourceField, rowIndex);
+        JsonNode node = resolveSourceValue(root, sourceModule, sourceField, rowIndex);
         if (node == null || node.isMissingNode() || node.isNull()) {
             return new ResolvedValue(StringUtils.hasText(defaultValue) ? defaultValue : null, StringUtils.hasText(defaultValue), true);
         }
@@ -632,8 +635,17 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         return new ResolvedValue(value, false, false);
     }
 
-    private JsonNode resolveJsonPath(JsonNode root, String sourceField, int rowIndex) {
-        String normalized = normalizeSourceField(sourceField);
+    private JsonNode resolveSourceValue(JsonNode root, String sourceModule, String sourceField, int rowIndex) {
+        for (String candidate : sourcePathCandidates(sourceModule, sourceField)) {
+            JsonNode node = resolveJsonPath(root, candidate, rowIndex);
+            if (node != null && !node.isMissingNode() && !node.isNull()) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    private JsonNode resolveJsonPath(JsonNode root, String normalized, int rowIndex) {
         JsonNode node = root;
         for (String part : normalized.split("\\.")) {
             if (!StringUtils.hasText(part)) {
@@ -653,15 +665,44 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         return node;
     }
 
-    private String normalizeSourceField(String sourceField) {
+    private List<String> sourcePathCandidates(String sourceModule, String sourceField) {
+        if (!StringUtils.hasText(sourceField)) {
+            return List.of();
+        }
+        List<String> candidates = new ArrayList<>();
+        String normalized = normalizeSourceField(sourceModule, sourceField);
+        candidates.add(normalized);
+        if (!normalized.equals(sourceField)) {
+            candidates.add(sourceField);
+        }
+        if ("customerSapInfo".equals(sourceModule) && normalized.startsWith("sapInfos[].")) {
+            candidates.add("sapInfo." + normalized.substring("sapInfos[].".length()));
+        }
+        return candidates;
+    }
+
+    private String normalizeSourceField(String sourceModule, String sourceField) {
+        if (sourceField.startsWith("customer.")
+            || sourceField.startsWith("sapInfo.")
+            || sourceField.startsWith("sapInfos[].")
+            || sourceField.startsWith("sapOrgs[].")
+            || sourceField.startsWith("payload.")) {
+            return sourceField;
+        }
         if (sourceField.startsWith("customerSapInfo.")) {
             return "sapInfos[]." + sourceField.substring(sourceField.indexOf('.') + 1);
         }
-        if (sourceField.startsWith("sapInfo.")) {
-            return "sapInfo." + sourceField.substring(sourceField.indexOf('.') + 1);
-        }
         if (sourceField.startsWith("customerSapOrg.")) {
             return "sapOrgs[]." + sourceField.substring(sourceField.indexOf('.') + 1);
+        }
+        if ("customer".equals(sourceModule)) {
+            return "customer." + sourceField;
+        }
+        if ("customerSapInfo".equals(sourceModule)) {
+            return "sapInfos[]." + sourceField;
+        }
+        if ("customerSapOrg".equals(sourceModule)) {
+            return "sapOrgs[]." + sourceField;
         }
         return sourceField;
     }
