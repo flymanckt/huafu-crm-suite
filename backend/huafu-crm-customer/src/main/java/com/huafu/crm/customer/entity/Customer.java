@@ -44,6 +44,8 @@ public class Customer {
     private String mainCustomerGroup;
     private String bundleCustomerName;
     private String bundleBrand;
+    private Long bundleCustomerId;
+    private String bundleCustomerSapCode;
     private Long ownerDeptId;
     private String salesMerchandiser;
     private BigDecimal locationLat;
@@ -125,6 +127,8 @@ public class Customer {
     public String getMainCustomerGroup() { return mainCustomerGroup; } public void setMainCustomerGroup(String v) { this.mainCustomerGroup = v; }
     public String getBundleCustomerName() { return bundleCustomerName; } public void setBundleCustomerName(String v) { this.bundleCustomerName = v; }
     public String getBundleBrand() { return bundleBrand; } public void setBundleBrand(String v) { this.bundleBrand = v; }
+    public Long getBundleCustomerId() { return bundleCustomerId; } public void setBundleCustomerId(Long v) { this.bundleCustomerId = v; }
+    public String getBundleCustomerSapCode() { return bundleCustomerSapCode; } public void setBundleCustomerSapCode(String v) { this.bundleCustomerSapCode = v; }
     public Long getOwnerDeptId() { return ownerDeptId; } public void setOwnerDeptId(Long v) { this.ownerDeptId = v; }
     public String getSalesMerchandiser() { return salesMerchandiser; } public void setSalesMerchandiser(String v) { this.salesMerchandiser = v; }
     public BigDecimal getLocationLat() { return locationLat; } public void setLocationLat(BigDecimal v) { this.locationLat = v; }

@@ -79,8 +79,9 @@ start_java_service() {
     echo "[start] customer SAP JCo lib detected: $SAP_JCO_LIB_DIR"
     nohup "${java_cmd[@]}" \
       -Djava.library.path="$SAP_JCO_NATIVE_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-      -cp "$jar:$SAP_JCO_LIB_DIR/*" \
-      org.springframework.boot.loader.launch.JarLauncher > "$log_file" 2>&1 &
+      -Dloader.path="$SAP_JCO_LIB_DIR" \
+      -cp "$jar" \
+      org.springframework.boot.loader.launch.PropertiesLauncher > "$log_file" 2>&1 &
   else
     nohup "${java_cmd[@]}" -jar "$jar" > "$log_file" 2>&1 &
   fi
