@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huafu.crm.common.api.PageResult;
 import com.huafu.crm.common.context.UserContext;
+import com.huafu.crm.common.entity.CrmCustomerSapInfo;
 import com.huafu.crm.common.exception.BizException;
 import com.huafu.crm.common.util.InputSanitizer;
 import com.huafu.crm.customer.dto.IntegrationFieldMappingDTO;
@@ -25,6 +26,8 @@ import com.huafu.crm.customer.mapper.IntegrationFieldMappingMapper;
 import com.huafu.crm.customer.mapper.IntegrationInterfaceMapper;
 import com.huafu.crm.customer.mapper.IntegrationLogMapper;
 import com.huafu.crm.customer.mapper.SapRfcConfigMapper;
+import com.huafu.crm.customer.mapper.CrmCustomerSapInfoMapper;
+import com.huafu.crm.customer.mapper.CustomerMapper;
 import com.huafu.crm.customer.service.IntegrationPlatformService;
 import com.huafu.crm.customer.service.sap.SapJcoResult;
 import com.huafu.crm.customer.service.sap.SapJcoService;
@@ -69,6 +72,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private final IntegrationInterfaceMapper interfaceMapper;
     private final IntegrationFieldMappingMapper mappingMapper;
     private final IntegrationLogMapper logMapper;
+    private final CrmCustomerSapInfoMapper sapInfoMapper;
+    private final CustomerMapper customerMapper;
     private final UserContext userContext;
     private final SapJcoService sapJcoService;
 
@@ -78,6 +83,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         IntegrationInterfaceMapper interfaceMapper,
         IntegrationFieldMappingMapper mappingMapper,
         IntegrationLogMapper logMapper,
+        CrmCustomerSapInfoMapper sapInfoMapper,
+        CustomerMapper customerMapper,
         UserContext userContext,
         SapJcoService sapJcoService
     ) {
@@ -86,6 +93,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         this.interfaceMapper = interfaceMapper;
         this.mappingMapper = mappingMapper;
         this.logMapper = logMapper;
+        this.sapInfoMapper = sapInfoMapper;
+        this.customerMapper = customerMapper;
         this.userContext = userContext;
         this.sapJcoService = sapJcoService;
     }
@@ -518,9 +527,59 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             return ExecuteResult.failed(result.errorMessage(), result.retryable());
         }
         ResponseDecision decision = evaluateResponseSuccess(iface, result.responsePayload(), null);
-        return decision.success()
-            ? ExecuteResult.success(result.responsePayload())
-            : ExecuteResult.failed("接口返回判断为失败：" + decision.message(), result.responsePayload(), false);
+        if (!decision.success()) {
+            return ExecuteResult.failed("接口返回判断为失败：" + decision.message(), result.responsePayload(), false);
+        }
+        applySapCusResponseBackfill(iface, log, result.responsePayload());
+        return ExecuteResult.success(result.responsePayload());
+    }
+
+    private void applySapCusResponseBackfill(IntegrationInterface iface, IntegrationLog log, String responsePayload) {
+        if (!"SAP_CUS".equals(iface.getInterfaceCode()) || !StringUtils.hasText(responsePayload)) {
+            return;
+        }
+        SapCusBusinessKey key = parseSapCusBusinessKey(log.getBusinessKey());
+        if (key == null) {
+            return;
+        }
+        String sapCode = resolveXmlFieldValue(responsePayload, "IO_ITAB.KUNNR");
+        if (!StringUtils.hasText(sapCode)) {
+            sapCode = resolveXmlFieldValue(responsePayload, "KUNNR");
+        }
+        if (!StringUtils.hasText(sapCode)) {
+            return;
+        }
+        CrmCustomerSapInfo existing = sapInfoMapper.selectById(key.sapInfoId());
+        if (existing == null || existing.getDeleted() != null && existing.getDeleted() == 1 || !key.customerId().equals(existing.getCustomerId())) {
+            return;
+        }
+        String safeSapCode = InputSanitizer.safeText(sapCode).trim();
+        sapInfoMapper.update(null, new LambdaUpdateWrapper<CrmCustomerSapInfo>()
+            .eq(CrmCustomerSapInfo::getId, key.sapInfoId())
+            .eq(CrmCustomerSapInfo::getCustomerId, key.customerId())
+            .set(CrmCustomerSapInfo::getSapCode, safeSapCode)
+            .set(CrmCustomerSapInfo::getUpdatedBy, String.valueOf(currentUserId()))
+            .set(CrmCustomerSapInfo::getUpdatedTime, java.time.OffsetDateTime.now()));
+        if (Integer.valueOf(1).equals(existing.getIsDefault())) {
+            customerMapper.update(null, new LambdaUpdateWrapper<com.huafu.crm.customer.entity.Customer>()
+                .eq(com.huafu.crm.customer.entity.Customer::getId, key.customerId())
+                .set(com.huafu.crm.customer.entity.Customer::getSapCustomerCode, safeSapCode));
+        }
+    }
+
+    private SapCusBusinessKey parseSapCusBusinessKey(String businessKey) {
+        if (!StringUtils.hasText(businessKey) || !businessKey.startsWith("CUSTOMER_SAP_INFO:")) {
+            return null;
+        }
+        String[] parts = businessKey.split(":");
+        if (parts.length < 3) {
+            return null;
+        }
+        try {
+            return new SapCusBusinessKey(Long.parseLong(parts[1]), Long.parseLong(parts[2]));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     private void updateMappingDetail(Long logId, String mappingDetail) {
@@ -1285,6 +1344,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         }
         return interfaceMapper.selectCount(wrapper) > 0;
     }
+
+    private record SapCusBusinessKey(Long customerId, Long sapInfoId) {}
 
     private Long currentUserId() {
         return userContext.getCurrentUserId().orElse(1L);
