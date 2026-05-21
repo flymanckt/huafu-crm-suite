@@ -20,6 +20,19 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
+      <el-table-column prop="accountGroup" label="账户组" width="120">
+        <template #default="{ row }">
+          <DictSelect v-if="row._editing" v-model="row.accountGroup" dict-code="sap_account_group" size="small" style="width:100%" />
+          <DictTag v-else-if="row.accountGroup" dict-code="sap_account_group" :value="String(row.accountGroup)" size="small" />
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="countryCode" label="国家代码" width="100">
+        <template #default="{ row }">
+          <el-input v-if="row._editing" v-model="row.countryCode" size="small" />
+          <span v-else>{{ row.countryCode || '-' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip>
         <template #default="{ row }"><el-input v-if="row._editing" v-model="row.description" size="small" /><span v-else>{{ row.description }}</span></template>
       </el-table-column>
@@ -43,12 +56,16 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createSapInfoV1, deleteSapInfoV1, getSapInfoListV1, updateSapInfoV1 } from '@/api/customer'
+import DictSelect from '@/components/Dict/DictSelect.vue'
+import DictTag from '@/components/Dict/DictTag.vue'
+import { useDict } from '@/composables/useDict'
 
 const props = defineProps({ customerId: { type: [String, Number], required: true } })
 const tableData = ref([])
 const saving = ref(false)
 const editingRow = ref(null)
 const hasEditingRow = computed(() => tableData.value.some(row => row._editing))
+const { loadDictItems } = useDict()
 
 const loadData = async () => {
   if (!props.customerId) return
@@ -60,6 +77,8 @@ const emptyRow = () => ({
   _isNew: true,
   sapCode: '',
   isDefault: tableData.value.length ? 0 : 1,
+  accountGroup: '',
+  countryCode: '',
   description: ''
 })
 
@@ -110,7 +129,10 @@ const handleDelete = async (row) => {
   ElMessage.success('删除成功')
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadDictItems(['sap_account_group'])
+  loadData()
+})
 watch(() => props.customerId, loadData)
 </script>
 

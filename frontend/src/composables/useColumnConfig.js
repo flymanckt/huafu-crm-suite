@@ -6,16 +6,16 @@ const DEFAULT_CUSTOMER_COLUMNS = [
   { key: 'customerCode', label: '客户编码', width: 120, visible: true, fixed: true },
   { key: 'customerName', label: '客户名称', width: 180, visible: true, fixed: true },
   { key: 'customerShortName', label: '客户简称', width: 140, visible: false },
-  { key: 'type', label: '客户类型', width: 100, visible: true },
-  { key: 'level', label: '客户等级', width: 100, visible: true },
-  { key: 'status', label: '客户状态', width: 100, visible: true },
+  { key: 'type', label: '客户类型', width: 100, visible: true, dictCode: 'customer_type' },
+  { key: 'level', label: '客户等级', width: 100, visible: true, dictCode: 'customer_level' },
+  { key: 'status', label: '客户状态', width: 100, visible: true, dictCode: 'customer_status' },
   { key: 'province', label: '省', width: 90, visible: true },
   { key: 'city', label: '市', width: 100, visible: false },
   { key: 'district', label: '区县', width: 100, visible: false },
   { key: 'address', label: '详细地址', width: 220, visible: false },
   { key: 'mainContactName', label: '主联系人', width: 120, visible: true },
   { key: 'mainContactPhone', label: '主联系人电话', width: 140, visible: false },
-  { key: 'mainContactRole', label: '主联系人职务', width: 130, visible: false },
+  { key: 'mainContactRole', label: '主联系人职务', width: 130, visible: false, dictCode: 'contact_role' },
   { key: 'annualRevenue', label: '年营业额', width: 120, visible: false, align: 'right' },
   { key: 'creditLimit', label: '信用额度', width: 120, visible: false, align: 'right' },
   { key: 'taxRate', label: '税率', width: 100, visible: false, align: 'right' },
@@ -30,16 +30,16 @@ const DEFAULT_CUSTOMER_COLUMNS = [
   { key: 'createdTime', label: '创建时间', width: 170, visible: false },
   { key: 'tenantId', label: '租户ID', width: 100, visible: false },
   { key: 'version', label: '版本', width: 80, visible: false },
-  { key: 'customerCategory', label: '客户分类', width: 120, visible: false },
+  { key: 'customerCategory', label: '客户分类', width: 120, visible: false, dictCode: 'customer_category' },
   { key: 'customerSegment', label: '客户品类', width: 120, visible: false },
-  { key: 'businessType', label: '业务类型', width: 120, visible: true },
+  { key: 'businessType', label: '业务类型', width: 120, visible: true, dictCode: 'biz_type' },
   { key: 'countryRegion', label: '国家区域', width: 120, visible: false },
   { key: 'mainBrand', label: '主要合作品牌', width: 160, visible: false },
   { key: 'annualYarnVolume', label: '年纱线用量', width: 130, visible: false, align: 'right' },
   { key: 'machineCount', label: '机台数', width: 100, visible: false, align: 'right' },
   { key: 'productionCapacity', label: '产能情况', width: 160, visible: false },
   { key: 'industryPosition', label: '行业地位', width: 160, visible: false },
-  { key: 'mainCustomerGroup', label: '主要客户群体', width: 140, visible: false },
+  { key: 'mainCustomerGroup', label: '主要客户群体', width: 140, visible: false, dictCode: 'customer_group' },
   { key: 'bundleCustomerName', label: '捆绑客户/品牌', width: 180, visible: false },
   { key: 'bundleCustomerSapCode', label: '捆绑客户SAP代码', width: 150, visible: false },
   { key: 'ownerDeptId', label: '归属部门ID', width: 120, visible: false },
@@ -48,22 +48,22 @@ const DEFAULT_CUSTOMER_COLUMNS = [
   { key: 'locationLng', label: '经度', width: 110, visible: false, align: 'right' },
   { key: 'unifiedSocialCreditCode', label: '统一社会信用代码', width: 190, visible: false },
   { key: 'englishName', label: '英文全称', width: 180, visible: false },
-  { key: 'assetType', label: '资产类型', width: 120, visible: false },
-  { key: 'customerSource', label: '客户来源', width: 120, visible: false },
-  { key: 'customerStage', label: '客户阶段', width: 110, visible: false },
+  { key: 'assetType', label: '资产类型', width: 120, visible: false, dictCode: 'asset_type' },
+  { key: 'customerSource', label: '客户来源', width: 120, visible: false, dictCode: 'customer_source' },
+  { key: 'customerStage', label: '客户阶段', width: 110, visible: false, dictCode: 'customer_stage' },
   { key: 'competitorShareJson', label: '竞争对手占比', width: 180, visible: false },
   { key: 'cooperationBrandJson', label: '合作品牌明细', width: 180, visible: false },
-  { key: 'riskLevel', label: '风险等级', width: 100, visible: false },
+  { key: 'riskLevel', label: '风险等级', width: 100, visible: false, dictCode: 'risk_level' },
   { key: 'taxId', label: '增值税登记号', width: 160, visible: false },
   { key: 'bankName', label: '开户行', width: 160, visible: false },
   { key: 'bankAccount', label: '银行账号', width: 160, visible: false },
   { key: 'invoiceTitle', label: '开票抬头', width: 180, visible: false },
-  { key: 'companyCode', label: '公司代码', width: 110, visible: false },
-  { key: 'priceList', label: '价格清单', width: 120, visible: false },
-  { key: 'currency', label: '货币', width: 90, visible: false },
-  { key: 'deliveryFactory', label: '交货工厂', width: 130, visible: false },
-  { key: 'accountAssignmentGroup', label: '账户分配组', width: 140, visible: false },
-  { key: 'taxClassification', label: '税分类', width: 120, visible: false },
+  { key: 'companyCode', label: '公司代码', width: 110, visible: false, dictCode: 'company_code' },
+  { key: 'priceList', label: '价格清单', width: 120, visible: false, dictCode: 'price_list' },
+  { key: 'currency', label: '货币', width: 90, visible: false, dictCode: 'currency' },
+  { key: 'deliveryFactory', label: '交货工厂', width: 130, visible: false, dictCode: 'delivery_plant' },
+  { key: 'accountAssignmentGroup', label: '账户分配组', width: 140, visible: false, dictCode: 'account_assignment_group' },
+  { key: 'taxClassification', label: '税分类', width: 120, visible: false, dictCode: 'tax_classification' },
   { key: 'shipToParty', label: '送达方', width: 120, visible: false },
   { key: 'soldToParty', label: '售达方', width: 120, visible: false },
   { key: 'payerParty', label: '付款方', width: 120, visible: false },
@@ -91,6 +91,8 @@ const normalizeColumns = (columns = []) => columns.map(col => ({
   fixed: col.fixed === true,
   align: col.align,
   formatter: col.formatter,
+  dictCode: col.dictCode,
+  valueType: col.valueType,
 }))
 
 const mergeColumns = (savedColumns = [], defaultColumns = []) => {
@@ -98,7 +100,16 @@ const mergeColumns = (savedColumns = [], defaultColumns = []) => {
   const defaultMap = new Map(defaults.map(col => [col.key, col]))
   const merged = normalizeColumns(savedColumns)
     .filter(col => defaultMap.has(col.key))
-    .map(col => ({ ...defaultMap.get(col.key), ...col, fixed: defaultMap.get(col.key).fixed }))
+    .map(col => {
+      const base = defaultMap.get(col.key)
+      return {
+        ...base,
+        ...col,
+        fixed: base.fixed,
+        dictCode: col.dictCode || base.dictCode,
+        valueType: col.valueType || base.valueType,
+      }
+    })
   defaults.forEach(col => {
     if (!merged.find(item => item.key === col.key)) merged.push({ ...col })
   })

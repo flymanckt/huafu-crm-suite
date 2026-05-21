@@ -60,7 +60,7 @@
       <!-- Tab1: 总览 -->
       <el-tab-pane name="1">
         <template #label><span class="tab-label"><el-icon><DataAnalysis /></el-icon>总览</span></template>
-        <OverviewTab :customer-id="detailId" :detail="detail" />
+        <OverviewTab :customer-id="detailId" :detail="detail" @updated="loadData" />
       </el-tab-pane>
       <!-- Tab2: 基础信息 -->
       <el-tab-pane name="2">
@@ -253,7 +253,7 @@ onMounted(() => { loadData(); loadContacts() })
   flex: 1;
   background: #fff;
   border-radius: 0 4px 4px 0;
-  padding: 20px;
+  padding: 12px 14px;
   min-height: 500px;
   overflow: auto;
 }

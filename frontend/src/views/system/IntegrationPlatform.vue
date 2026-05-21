@@ -730,6 +730,8 @@ const customerSapInfoFields = [
   { key: 'sapInfos[].tenantId', label: 'SAP信息-租户ID', type: 'number' },
   { key: 'sapInfos[].customerId', label: 'SAP信息-客户ID', type: 'number' },
   { key: 'sapInfos[].sapCode', label: 'SAP信息-SAP编号' },
+  { key: 'sapInfos[].accountGroup', label: 'SAP信息-账户组' },
+  { key: 'sapInfos[].countryCode', label: 'SAP信息-国家代码' },
   { key: 'sapInfos[].companyCode', label: 'SAP信息-公司代码' },
   { key: 'sapInfos[].salesOrg', label: 'SAP信息-销售组织' },
   { key: 'sapInfos[].distributionChannel', label: 'SAP信息-分销渠道' },

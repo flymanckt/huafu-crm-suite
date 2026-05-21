@@ -147,7 +147,8 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag dict-code="customer_status" :value="String(row.status)" />
+              <DictTag v-if="row.status" dict-code="customer_status" :value="String(row.status)" />
+              <span v-else>-</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -207,7 +208,8 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              {{ customerLabel.category(row.customerCategory) }}
+              <DictTag v-if="row.customerCategory" dict-code="customer_category" :value="String(row.customerCategory)" />
+              <span v-else>-</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -217,7 +219,8 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              {{ customerLabel.source(row.customerSource) }}
+              <DictTag v-if="row.customerSource" dict-code="customer_source" :value="String(row.customerSource)" />
+              <span v-else>-</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -227,7 +230,8 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              {{ customerLabel.group(row.mainCustomerGroup) }}
+              <DictTag v-if="row.mainCustomerGroup" dict-code="customer_group" :value="String(row.mainCustomerGroup)" />
+              <span v-else>-</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -237,7 +241,8 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              {{ customerLabel.stage(row.customerStage) }}
+              <DictTag v-if="row.customerStage" dict-code="customer_stage" :value="String(row.customerStage)" />
+              <span v-else>-</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -249,7 +254,8 @@
             show-overflow-tooltip
           >
             <template #default="{ row }">
-              {{ formatCell(row[col.key]) }}
+              <DictTag v-if="col.dictCode && hasValue(row[col.key])" :dict-code="col.dictCode" :value="String(row[col.key])" />
+              <span v-else>{{ formatCell(row[col.key]) }}</span>
             </template>
           </el-table-column>
         </template>
@@ -311,21 +317,21 @@ import { Plus, Setting, ArrowDown, Close } from '@element-plus/icons-vue'
 import { getCustomerPage, deleteCustomer, getPublicPoolPage, claimCustomer } from '@/api/customer'
 import CustomerForm from './CustomerForm.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import DictSelect from '@/components/Dict/DictSelect.vue'
 import DictTag from '@/components/Dict/DictTag.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig.js'
 import { useFilterPreset } from '@/composables/useFilterPreset.js'
-import { customerLabel } from '@/utils/customerFields'
 import { ElMessage } from 'element-plus'
+import { useDict } from '@/composables/useDict'
 
 const activeTab = ref('all')
 const loading = ref(false)
 const tableData = ref([])
 const total = ref(0)
 const pageCode = 'customer-list'
+const { loadDictItems } = useDict()
 const initialQuery = () => ({
   current: 1, size: 20,
   customerName: '', level: null, type: null, businessType: null, status: null, ownerName: '',
@@ -399,6 +405,7 @@ const currentFilters = computed(() => ({
 const visibleColumns = computed(() => {
   return allColumns.value.filter(c => c.visible)
 })
+const visibleDictCodes = computed(() => [...new Set(visibleColumns.value.map(c => c.dictCode).filter(Boolean))])
 
 const formatCell = (value) => {
   if (value === null || value === undefined || value === '') return '-'
@@ -406,6 +413,7 @@ const formatCell = (value) => {
   if (typeof value === 'object') return JSON.stringify(value)
   return value
 }
+const hasValue = (value) => value !== null && value !== undefined && value !== ''
 
 // 已有预设（用于覆盖）
 const existingPresets = computed(() => presets.value)
@@ -414,6 +422,10 @@ const existingPresets = computed(() => presets.value)
 watch(() => allColumns.value, () => {
   tableKey.value++
 }, { deep: true })
+
+watch(visibleDictCodes, (codes) => {
+  if (codes.length) loadDictItems(codes)
+}, { immediate: true })
 
 const loadData = async () => {
   loading.value = true

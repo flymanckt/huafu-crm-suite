@@ -171,7 +171,6 @@
                   :key="customer.id"
                   :label="formatBundleCustomerLabel(customer)"
                   :value="customer.id"
-                  :disabled="String(customer.id) === String(customerId)"
                 />
               </el-select>
             </el-form-item>
@@ -283,11 +282,26 @@ const addBundleOption = (customer) => {
   }
 }
 
+const defaultBundleCustomer = (customer = {}) => ({
+  id: customer.bundleCustomerId || customer.id,
+  customerName: customer.bundleCustomerName || customer.customerName || customer.customerShortName,
+  sapCustomerCode: customer.bundleCustomerSapCode || customer.sapCustomerCode
+})
+
+const applyDefaultBundleCustomer = (customer = {}) => {
+  if (customer.bundleCustomerId || !customer.id) return
+  formData.value.bundleCustomerId = customer.id
+  formData.value.bundleCustomerName = customer.customerName || customer.customerShortName || ''
+  formData.value.bundleCustomerSapCode = customer.sapCustomerCode || ''
+  formData.value.bundleBrand = ''
+}
+
 const searchBundleCustomers = async (keyword = '') => {
   bundleCustomerLoading.value = true
   try {
     const res = await getCustomerPage({ current: 1, size: 20, customerName: keyword || '' })
-    bundleCustomerOptions.value = (res?.records || []).filter(item => String(item.id) !== String(props.customerId))
+    bundleCustomerOptions.value = res?.records || []
+    addBundleOption(defaultBundleCustomer(formData.value))
   } finally {
     bundleCustomerLoading.value = false
   }
@@ -317,13 +331,7 @@ const loadOptions = async () => {
     ])
     deptTree.value = depts || []
     userOptions.value = users?.records || users?.list || users || []
-    if (props.detail?.bundleCustomerId) {
-      addBundleOption({
-        id: props.detail.bundleCustomerId,
-        customerName: props.detail.bundleCustomerName,
-        sapCustomerCode: props.detail.bundleCustomerSapCode
-      })
-    }
+    addBundleOption(defaultBundleCustomer(props.detail))
   } catch (error) {
     deptTree.value = []
     userOptions.value = []
@@ -373,13 +381,8 @@ const verifyTypedAddress = async () => {
 
 watch(() => props.detail, (val) => {
   formData.value = normalizeCustomerForForm(val)
-  if (val?.bundleCustomerId) {
-    addBundleOption({
-      id: val.bundleCustomerId,
-      customerName: val.bundleCustomerName,
-      sapCustomerCode: val.bundleCustomerSapCode
-    })
-  }
+  applyDefaultBundleCustomer(val)
+  addBundleOption(defaultBundleCustomer(formData.value))
 }, { immediate: true, deep: true })
 
 const handleSave = async () => {
@@ -439,9 +442,14 @@ onMounted(loadOptions)
 </script>
 
 <style scoped>
-.basic-info-tab { padding: 8px 0; }
-.tab-toolbar { margin-bottom: 16px; text-align: right; }
-.edit-form { padding: 8px 0; }
+.basic-info-tab { padding: 0; }
+.tab-toolbar { margin-bottom: 10px; text-align: right; }
+.basic-info-tab :deep(.el-card) { margin-bottom: 10px !important; border-radius: 6px; }
+.basic-info-tab :deep(.el-card__header) { padding: 9px 14px; font-weight: 600; }
+.basic-info-tab :deep(.el-card__body) { padding: 10px 14px; }
+.basic-info-tab :deep(.el-descriptions__cell) { padding: 7px 10px; }
+.edit-form { padding: 0; }
+.edit-form :deep(.el-form-item) { margin-bottom: 10px; }
 .address-input-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

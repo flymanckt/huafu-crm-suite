@@ -80,7 +80,7 @@
             </div>
             <div class="info-item">
               <span class="info-label">客户来源：</span>
-              <span>{{ sourceMap[detail.source] || '未知' }}</span>
+              <span>{{ customerLabel.source(detail.customerSource ?? detail.source) }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">最近跟进：</span>
@@ -97,7 +97,16 @@
           <span>客户画像要点</span>
         </div>
       </template>
-      <el-descriptions :column="2" border>
+      <el-form v-if="overviewEditing" :model="overviewForm" label-width="150px" class="profile-edit-form">
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="行业地位"><el-input v-model="overviewForm.industryPosition" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="主要客户群体"><DictSelect v-model="overviewForm.mainCustomerGroup" dict-code="customer_group" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="主要合作品牌"><el-input v-model="overviewForm.cooperationBrandJson" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="竞争对手及占比"><el-input v-model="overviewForm.competitorShareJson" type="textarea" :rows="2" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="其他资产/信息"><el-input v-model="overviewForm.otherInfo" type="textarea" :rows="2" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
+      <el-descriptions v-else :column="2" border>
         <el-descriptions-item label="行业地位">{{ detail.industryPosition || '-' }}</el-descriptions-item>
         <el-descriptions-item label="主要客户群体">{{ customerLabel.group(detail.mainCustomerGroup || detail.customerGroup) }}</el-descriptions-item>
         <el-descriptions-item label="主要合作品牌">{{ formatJsonText(detail.cooperationBrandJson) || detail.mainBrand || '-' }}</el-descriptions-item>
@@ -131,13 +140,15 @@
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
-import { getContactListV1, getCustomerOverviewV1, updateCustomerOverviewV1 } from '@/api/customer'
-import { customerLabel } from '@/utils/customerFields'
+import { getContactListV1, getCustomerOverviewV1, updateCustomer, updateCustomerOverviewV1 } from '@/api/customer'
+import { buildCustomerUpdatePayload, customerGroupCodes, customerLabel } from '@/utils/customerFields'
+import DictSelect from '@/components/Dict/DictSelect.vue'
 
 const props = defineProps({
   customerId: { type: [String, Number], required: true },
   detail: { type: Object, default: () => ({}) }
 })
+const emit = defineEmits(['updated'])
 
 const chartRef = ref(null)
 const chartPeriod = ref('month')
@@ -145,11 +156,17 @@ const chartInstance = ref(null)
 const yarnTableData = ref([])
 const stats = ref({ contactCount: 0 })
 const overview = ref({})
-const overviewForm = ref({ overviewSummary: '', strategyPosition: '' })
+const overviewForm = ref({
+  overviewSummary: '',
+  strategyPosition: '',
+  industryPosition: '',
+  mainCustomerGroup: null,
+  cooperationBrandJson: '',
+  competitorShareJson: '',
+  otherInfo: ''
+})
 const overviewEditing = ref(false)
 const overviewSaving = ref(false)
-
-const sourceMap = { 1: '展会', 2: '转介绍', 3: '自主开发', 4: '平台' }
 
 const formatAmount = (val) => {
   if (!val && val !== 0) return '-'
@@ -213,7 +230,12 @@ const loadOverview = async () => {
 const startOverviewEdit = () => {
   overviewForm.value = {
     overviewSummary: displaySummary.value,
-    strategyPosition: overview.value.strategyPosition || props.detail.strategicLevel || ''
+    strategyPosition: overview.value.strategyPosition || props.detail.strategicLevel || '',
+    industryPosition: props.detail.industryPosition || '',
+    mainCustomerGroup: normalizeCustomerGroup(props.detail.mainCustomerGroup || props.detail.customerGroup),
+    cooperationBrandJson: props.detail.cooperationBrandJson || props.detail.mainBrand || '',
+    competitorShareJson: props.detail.competitorShareJson || '',
+    otherInfo: props.detail.remark || ''
   }
   overviewEditing.value = true
 }
@@ -226,11 +248,27 @@ const cancelOverviewEdit = () => {
   overviewEditing.value = false
 }
 
+const normalizeCustomerGroup = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return value
+  if (/^-?\d+$/.test(String(value))) return Number(value)
+  return customerGroupCodes[value] ?? value
+}
+
 const saveOverview = async () => {
   overviewSaving.value = true
   try {
-    overview.value = await updateCustomerOverviewV1(props.customerId, overviewForm.value)
+    const { overviewSummary, strategyPosition, industryPosition, mainCustomerGroup, cooperationBrandJson, competitorShareJson, otherInfo } = overviewForm.value
+    overview.value = await updateCustomerOverviewV1(props.customerId, { overviewSummary, strategyPosition })
+    await updateCustomer(props.customerId, buildCustomerUpdatePayload({
+      industryPosition,
+      mainCustomerGroup,
+      cooperationBrandJson,
+      competitorShareJson,
+      remark: otherInfo
+    }))
     overviewEditing.value = false
+    emit('updated')
     ElMessage.success('概述已保存')
   } finally {
     overviewSaving.value = false
@@ -307,6 +345,7 @@ onUnmounted(() => {
 
 .chart-row { margin-bottom: 16px; }
 .profile-fields-card { margin-bottom: 16px; }
+.profile-edit-form :deep(.el-form-item) { margin-bottom: 10px; }
 .chart-container { height: 300px; }
 
 .overview-card { height: 100%; }
