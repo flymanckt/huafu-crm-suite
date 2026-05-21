@@ -70,7 +70,6 @@ const DEFAULT_CUSTOMER_COLUMNS = [
   { key: 'soldToParty', label: '售达方', width: 120, visible: false },
   { key: 'payerParty', label: '付款方', width: 120, visible: false },
   { key: 'countryCode', label: '国家代码', width: 110, visible: false },
-  { key: 'region', label: '地区', width: 110, visible: false },
 ]
 
 const stores = new Map()

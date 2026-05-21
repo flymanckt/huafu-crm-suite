@@ -169,13 +169,6 @@ export const customerLevelType = {
   D: 'info'
 }
 
-export const regionLabels = {
-  1: '华东',
-  2: '华南',
-  3: '华北',
-  4: '海外'
-}
-
 export const customerLabel = {
   type: (value) => labelOf(value, customerTypeLabels),
   level: (value) => labelOf(value, customerLevelLabels),
@@ -185,8 +178,7 @@ export const customerLabel = {
   source: (value) => labelOf(value, sourceLabels),
   group: (value) => labelOf(value, customerGroupLabels),
   stage: (value) => labelOf(value, stageLabels),
-  riskLevel: (value) => labelOf(value, riskLevelLabels),
-  region: (value) => labelOf(value, regionLabels)
+  riskLevel: (value) => labelOf(value, riskLevelLabels)
 }
 
 export function normalizeCustomerForForm(data = {}) {
@@ -211,7 +203,7 @@ export function normalizeCustomerForForm(data = {}) {
     mainCustomerGroup: normalizedCustomerGroup,
     customerGroup: normalizedCustomerGroup,
     riskLevel: enumValue(data.riskLevel),
-    region: enumValue(data.region, { 华东: 1, 华南: 2, 华北: 3, 海外: 4 }),
+    countryRegion: data.countryRegion ?? data.region ?? '',
     // 字段名归一
     productionCapacity: data.productionCapacity ?? data.capacityInfo ?? '',
     capacityInfo: data.productionCapacity ?? data.capacityInfo ?? '',
@@ -256,7 +248,6 @@ export function buildCustomerUpdatePayload(source = {}) {
     'companyCode', 'salesGroup', 'priceList', 'currency',
     'deliveryFactory', 'accountAssignmentGroup', 'taxClassification',
     'shipToParty', 'soldToParty', 'payerParty', 'countryCode',
-    'region',
     'ownerUserId', 'ownerDeptId',
   ]
   directFields.forEach((key) => putIfPresent(payload, key, source[key]))

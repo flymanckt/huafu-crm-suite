@@ -123,6 +123,11 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item label="国家区域">
+                  <el-input v-model="form.countryRegion" placeholder="请输入国家区域，如中国、香港、海外" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
                 <el-form-item label="机台数">
                   <el-input-number v-model="form.machineCount" :min="0" style="width:100%" />
                 </el-form-item>
@@ -342,6 +347,11 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
+                  <el-form-item label="国家区域">
+                    <el-input v-model="form.countryRegion" placeholder="请输入国家区域，如中国、香港、海外" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
                   <el-form-item label="机台数">
                     <el-input-number v-model="form.machineCount" :min="0" style="width:100%" />
                   </el-form-item>
@@ -506,7 +516,6 @@ const defaultForm = () => ({
   district: '',
   address: '',
   countryRegion: '',
-  region: null,
   // === 主要联系信息 ===
   mainContactName: '',
   mainContactPhone: '',

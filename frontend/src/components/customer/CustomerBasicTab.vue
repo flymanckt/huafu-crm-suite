@@ -41,6 +41,7 @@
             <el-col :span="12"><div class="field-item"><label>产能情况</label><value>{{ detail.productionCapacity || '-' }}</value></div></el-col>
             <el-col :span="12"><div class="field-item"><label>行业地位</label><value>{{ detail.industryPosition || '-' }}</value></div></el-col>
             <el-col :span="12"><div class="field-item"><label>主要客户群体</label><value>{{ detail.mainCustomerGroup || '-' }}</value></div></el-col>
+            <el-col :span="12"><div class="field-item"><label>国家区域</label><value>{{ detail.countryRegion || '-' }}</value></div></el-col>
             <el-col :span="12"><div class="field-item"><label>主要竞争对手</label><value>{{ detail.competitorShareJson || '-' }}</value></div></el-col>
           </el-row>
         </div>
@@ -132,7 +133,7 @@
           <el-col :span="12"><el-form-item label="客户分类"><el-input v-model="editForm.customerCategory" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户品类"><el-input v-model="editForm.customerSegment" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户来源"><el-input v-model="editForm.customerSource" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="国家/区域"><el-input v-model="editForm.countryRegion" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="国家区域"><el-input v-model="editForm.countryRegion" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="主要合作品牌"><el-input v-model="editForm.mainBrand" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="产能情况"><el-input v-model="editForm.productionCapacity" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="行业地位"><el-input v-model="editForm.industryPosition" /></el-form-item></el-col>

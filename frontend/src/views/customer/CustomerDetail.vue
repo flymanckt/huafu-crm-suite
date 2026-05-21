@@ -18,7 +18,7 @@
               </div>
               <div class="customer-meta">
                 <span v-if="detail.customerCode">编码：{{ detail.customerCode }}</span>
-                <span v-if="detail.province || detail.city || detail.district">地区：{{ detail.province }}{{ detail.city }}{{ detail.district }}</span>
+                <span v-if="detail.province || detail.city || detail.district">地址地区：{{ detail.province }}{{ detail.city }}{{ detail.district }}</span>
                 <span v-if="detail.sapCustomerCode">SAP：{{ detail.sapCustomerCode }}</span>
               </div>
               <div class="summary-grid">

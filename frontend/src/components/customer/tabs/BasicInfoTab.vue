@@ -52,7 +52,7 @@
         <el-descriptions-item label="机台数">{{ formData.machineCount || '-' }}</el-descriptions-item>
         <el-descriptions-item label="产能情况">{{ formData.capacityInfo || '-' }}</el-descriptions-item>
         <el-descriptions-item label="年营业额">{{ formData.annualRevenue ? formData.annualRevenue + '万元' : '-' }}</el-descriptions-item>
-        <el-descriptions-item label="国家/地区">{{ formData.countryRegion || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="国家区域">{{ formData.countryRegion || '-' }}</el-descriptions-item>
         <el-descriptions-item label="主营品牌">{{ formData.mainBrand || '-' }}</el-descriptions-item>
         <el-descriptions-item label="年用纱量">{{ formData.annualYarnVolume || '-' }}</el-descriptions-item>
       </el-descriptions>
@@ -66,7 +66,7 @@
           <el-col :span="12"><el-form-item label="机台数"><el-input-number v-model="formData.machineCount" :min="0" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="产能情况"><el-input v-model="formData.capacityInfo" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="年营业额"><el-input-number v-model="formData.annualRevenue" :min="0" :precision="2" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="国家/地区"><el-input v-model="formData.countryRegion" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="国家区域"><el-input v-model="formData.countryRegion" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="主营品牌"><el-input v-model="formData.mainBrand" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="年用纱量"><el-input v-model="formData.annualYarnVolume" /></el-form-item></el-col>
         </el-row>
@@ -81,7 +81,6 @@
         <el-descriptions-item label="负责人">{{ resolveUserName(formData.ownerUserId) }}</el-descriptions-item>
         <el-descriptions-item label="销售跟单">{{ formData.salesName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="销售组">{{ formData.salesGroup || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="国家区域">{{ regionMap[formData.region] || formData.region || '-' }}</el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
@@ -106,7 +105,6 @@
           </el-col>
           <el-col :span="12"><el-form-item label="销售跟单"><el-input v-model="formData.salesName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="销售组"><el-input v-model="formData.salesGroup" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="国家区域"><el-input v-model="formData.region" /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -236,7 +234,6 @@ const formData = ref({})
 const deptTree = ref([])
 const userOptions = ref([])
 
-const regionMap = { 1: '华东', 2: '华南', 3: '华北', 4: '海外' }
 const riskLevelTagType = { 1: 'success', 2: 'warning', 3: 'danger' }
 
 const flattenDepts = (nodes = []) => nodes.flatMap(node => [node, ...flattenDepts(node.children || [])])

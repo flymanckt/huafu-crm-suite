@@ -33,8 +33,7 @@
     <DictSelect v-model="form.customerGroup" dict-code="customer_group" value-type="number" placeholder="请选择" clearable />
   </el-form-item>
   <el-form-item label="客户细分组"><el-input v-model="form.customerSegment" placeholder="请输入客户细分组" /></el-form-item>
-  <el-form-item label="国家/地区"><el-input v-model="form.countryRegion" placeholder="请输入国家/地区" /></el-form-item>
-  <el-form-item label="区域"><el-input v-model="form.region" placeholder="请输入区域" /></el-form-item>
+  <el-form-item label="国家区域"><el-input v-model="form.countryRegion" placeholder="请输入国家区域" /></el-form-item>
   <el-form-item label="主要品牌"><el-input v-model="form.mainBrand" placeholder="请输入主要品牌" /></el-form-item>
   <el-form-item label="年用纱量(吨)"><el-input-number v-model="form.annualYarnVolume" :precision="2" :min="0" /></el-form-item>
   <el-form-item label="机台数"><el-input-number v-model="form.machineCount" :min="0" /></el-form-item>

@@ -34,6 +34,7 @@ public class Customer {
     private String customerCategory;
     private String customerSegment;
     private Integer businessType;
+    // 国家区域，例如中国、香港、海外。
     private String countryRegion;
     private String mainBrand;
     private BigDecimal annualYarnVolume;
@@ -71,6 +72,7 @@ public class Customer {
     private String soldToParty;
     private String payerParty;
     private String countryCode;
+    // 历史兼容字段，前台不再使用；国家区域统一使用 countryRegion。
     private String region;
     // === 审计字段 ===
     @TableField(fill = FieldFill.INSERT)
