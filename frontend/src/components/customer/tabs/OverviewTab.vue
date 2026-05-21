@@ -91,6 +91,21 @@
       </el-col>
     </el-row>
 
+    <el-card shadow="never" class="profile-fields-card">
+      <template #header>
+        <div class="card-header">
+          <span>客户画像要点</span>
+        </div>
+      </template>
+      <el-descriptions :column="2" border>
+        <el-descriptions-item label="行业地位">{{ detail.industryPosition || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="主要客户群体">{{ customerLabel.group(detail.mainCustomerGroup || detail.customerGroup) }}</el-descriptions-item>
+        <el-descriptions-item label="主要合作品牌">{{ formatJsonText(detail.cooperationBrandJson) || detail.mainBrand || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="主要合作竞争对手及占比情况">{{ formatJsonText(detail.competitorShareJson) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="其他资产或其他信息">{{ [detail.assetType, detail.remark].filter(Boolean).join('；') || '-' }}</el-descriptions-item>
+      </el-descriptions>
+    </el-card>
+
     <!-- 纱线用量表格 -->
     <el-card shadow="never" style="margin-top:16px">
       <template #header>
@@ -143,6 +158,26 @@ const formatAmount = (val) => {
 
 const fieldText = (label, value) => value || value === 0 ? `${label}${value}` : ''
 
+const formatJsonText = (value) => {
+  if (!value) return ''
+  if (typeof value !== 'string') return String(value)
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed.map(item => {
+        if (typeof item === 'string') return item
+        return [item.name, item.brand, item.customer, item.share, item.ratio].filter(Boolean).join(' ')
+      }).filter(Boolean).join('；')
+    }
+    if (typeof parsed === 'object' && parsed !== null) {
+      return Object.entries(parsed).map(([key, val]) => `${key}:${val}`).join('；')
+    }
+  } catch {
+    return value
+  }
+  return value
+}
+
 const generatedSummary = computed(() => {
   const d = props.detail || {}
   const area = [d.country, d.province, d.city, d.district].filter(Boolean).join('')
@@ -150,7 +185,11 @@ const generatedSummary = computed(() => {
     `${d.customerName || '该客户'}当前为${customerLabel.type(d.type)}，客户状态为${customerLabel.status(d.status)}，等级为${customerLabel.level(d.level)}`,
     area ? `客户位于${area}` : '',
     d.industryPosition ? `行业定位为${d.industryPosition}` : '',
-    d.mainBrand ? `主要品牌/产品为${d.mainBrand}` : '',
+    d.mainCustomerGroup ? `主要客户群体为${customerLabel.group(d.mainCustomerGroup)}` : '',
+    d.mainBrand ? `主要合作品牌为${d.mainBrand}` : '',
+    d.cooperationBrandJson ? `合作品牌明细为${formatJsonText(d.cooperationBrandJson)}` : '',
+    d.competitorShareJson ? `主要竞争对手及占比为${formatJsonText(d.competitorShareJson)}` : '',
+    d.assetType || d.remark ? `其他资产或信息为${[d.assetType, d.remark].filter(Boolean).join('、')}` : '',
     d.businessType ? `业务类型为${d.businessType}` : '',
     d.category ? `客户分类为${d.category}` : '',
     fieldText('机台数', d.machineCount),
@@ -267,6 +306,7 @@ onUnmounted(() => {
 .stat-label { font-size: 13px; color: #666; margin-top: 4px; }
 
 .chart-row { margin-bottom: 16px; }
+.profile-fields-card { margin-bottom: 16px; }
 .chart-container { height: 300px; }
 
 .overview-card { height: 100%; }

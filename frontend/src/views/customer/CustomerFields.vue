@@ -43,9 +43,6 @@
   <el-form-item label="资产类型">
     <DictSelect v-model="form.assetType" dict-code="asset_type" value-type="number" placeholder="请选择" clearable />
   </el-form-item>
-  <el-form-item label="是否黑名单">
-    <DictSelect v-model="form.blacklist" dict-code="yes_no" value-type="number" placeholder="请选择" clearable />
-  </el-form-item>
   <el-form-item label="风险等级">
     <DictSelect v-model="form.riskLevel" dict-code="risk_level" value-type="number" placeholder="请选择" clearable />
   </el-form-item>

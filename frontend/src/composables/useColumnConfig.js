@@ -40,8 +40,8 @@ const DEFAULT_CUSTOMER_COLUMNS = [
   { key: 'productionCapacity', label: '产能情况', width: 160, visible: false },
   { key: 'industryPosition', label: '行业地位', width: 160, visible: false },
   { key: 'mainCustomerGroup', label: '主要客户群体', width: 140, visible: false },
-  { key: 'bundleCustomerName', label: '捆绑客户', width: 160, visible: false },
-  { key: 'bundleBrand', label: '捆绑品牌', width: 160, visible: false },
+  { key: 'bundleCustomerName', label: '捆绑客户/品牌', width: 180, visible: false },
+  { key: 'bundleCustomerSapCode', label: '捆绑客户SAP代码', width: 150, visible: false },
   { key: 'ownerDeptId', label: '归属部门ID', width: 120, visible: false },
   { key: 'salesMerchandiser', label: '销售跟单', width: 120, visible: false },
   { key: 'locationLat', label: '纬度', width: 110, visible: false, align: 'right' },
@@ -53,14 +53,12 @@ const DEFAULT_CUSTOMER_COLUMNS = [
   { key: 'customerStage', label: '客户阶段', width: 110, visible: false },
   { key: 'competitorShareJson', label: '竞争对手占比', width: 180, visible: false },
   { key: 'cooperationBrandJson', label: '合作品牌明细', width: 180, visible: false },
-  { key: 'blacklist', label: '黑名单', width: 90, visible: false },
   { key: 'riskLevel', label: '风险等级', width: 100, visible: false },
   { key: 'taxId', label: '增值税登记号', width: 160, visible: false },
   { key: 'bankName', label: '开户行', width: 160, visible: false },
   { key: 'bankAccount', label: '银行账号', width: 160, visible: false },
   { key: 'invoiceTitle', label: '开票抬头', width: 180, visible: false },
   { key: 'companyCode', label: '公司代码', width: 110, visible: false },
-  { key: 'salesGroup', label: '销售组', width: 110, visible: false },
   { key: 'priceList', label: '价格清单', width: 120, visible: false },
   { key: 'currency', label: '货币', width: 90, visible: false },
   { key: 'deliveryFactory', label: '交货工厂', width: 130, visible: false },
@@ -69,7 +67,6 @@ const DEFAULT_CUSTOMER_COLUMNS = [
   { key: 'shipToParty', label: '送达方', width: 120, visible: false },
   { key: 'soldToParty', label: '售达方', width: 120, visible: false },
   { key: 'payerParty', label: '付款方', width: 120, visible: false },
-  { key: 'countryCode', label: '国家代码', width: 110, visible: false },
 ]
 
 const stores = new Map()

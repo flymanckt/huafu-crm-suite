@@ -14,6 +14,7 @@
       <template #header><span>基本信息</span></template>
       <el-descriptions :column="2" border v-if="!isEditing">
         <el-descriptions-item label="客户名称">{{ formData.customerName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="客户名称简称">{{ formData.customerShortName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户编码">{{ formData.customerCode || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户类型">{{ customerLabel.type(formData.type) }}</el-descriptions-item>
         <el-descriptions-item label="客户状态"><el-tag :type="customerStatusType[formData.status]">{{ customerLabel.status(formData.status) }}</el-tag></el-descriptions-item>
@@ -21,12 +22,12 @@
         <el-descriptions-item label="客户阶段">{{ customerLabel.stage(formData.customerStage) }}</el-descriptions-item>
         <el-descriptions-item label="英文名称">{{ formData.englishName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="统一社会信用代码">{{ formData.unifiedSocialCreditCode || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="黑名单"><el-tag :type="formData.blacklist === 1 ? 'danger' : 'info'">{{ formData.blacklist === 1 ? '是' : '否' }}</el-tag></el-descriptions-item>
         <el-descriptions-item label="风险等级"><el-tag :type="riskLevelTagType[formData.riskLevel]">{{ customerLabel.riskLevel(formData.riskLevel) }}</el-tag></el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
           <el-col :span="12"><el-form-item label="客户名称" prop="customerName"><el-input v-model="formData.customerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="客户名称简称"><el-input v-model="formData.customerShortName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户编码"><el-input v-model="formData.customerCode" disabled /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户类型" prop="type"><DictSelect v-model="formData.type" dict-code="customer_type" value-type="number" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户状态" prop="status"><DictSelect v-model="formData.status" dict-code="customer_status" value-type="number" /></el-form-item></el-col>
@@ -34,7 +35,6 @@
           <el-col :span="12"><el-form-item label="客户阶段"><DictSelect v-model="formData.customerStage" dict-code="customer_stage" value-type="number" clearable /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="英文名称"><el-input v-model="formData.englishName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="统一社会信用代码"><el-input v-model="formData.unifiedSocialCreditCode" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="黑名单"><DictSelect v-model="formData.blacklist" dict-code="yes_no" value-type="number" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="风险等级"><DictSelect v-model="formData.riskLevel" dict-code="risk_level" value-type="number" clearable /></el-form-item></el-col>
         </el-row>
       </el-form>
@@ -80,7 +80,6 @@
         <el-descriptions-item label="归属部门">{{ resolveDeptName(formData.ownerDeptId) }}</el-descriptions-item>
         <el-descriptions-item label="负责人">{{ resolveUserName(formData.ownerUserId) }}</el-descriptions-item>
         <el-descriptions-item label="销售跟单">{{ formData.salesName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="销售组">{{ formData.salesGroup || '-' }}</el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
@@ -104,7 +103,6 @@
             </el-form-item>
           </el-col>
           <el-col :span="12"><el-form-item label="销售跟单"><el-input v-model="formData.salesName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="销售组"><el-input v-model="formData.salesGroup" /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -148,13 +146,37 @@
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>捆绑关系</span></template>
       <el-descriptions :column="2" border v-if="!isEditing">
-        <el-descriptions-item label="捆绑客户">{{ formData.bundleCustomerName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="捆绑品牌">{{ formData.bundleBrand || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="捆绑客户/品牌">{{ formData.bundleCustomerName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="捆绑客户SAP代码">{{ formData.bundleCustomerSapCode || '-' }}</el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="捆绑客户"><el-input v-model="formData.bundleCustomerName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="捆绑品牌"><el-input v-model="formData.bundleBrand" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="捆绑客户/品牌">
+              <el-select
+                v-model="formData.bundleCustomerId"
+                filterable
+                remote
+                clearable
+                reserve-keyword
+                :remote-method="searchBundleCustomers"
+                :loading="bundleCustomerLoading"
+                placeholder="搜索并选择客户主数据"
+                style="width:100%"
+                @change="handleBundleCustomerChange"
+                @clear="clearBundleCustomer"
+              >
+                <el-option
+                  v-for="customer in bundleCustomerOptions"
+                  :key="customer.id"
+                  :label="formatBundleCustomerLabel(customer)"
+                  :value="customer.id"
+                  :disabled="String(customer.id) === String(customerId)"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="捆绑客户SAP代码"><el-input v-model="formData.bundleCustomerSapCode" disabled /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -185,14 +207,10 @@
       <template #header><span>SAP信息</span></template>
       <el-descriptions :column="2" border v-if="!isEditing">
         <el-descriptions-item label="SAP客户编码">{{ formData.sapCustomerCode || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="账户组">{{ formData.sapAccountGroup || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="国家代码">{{ formData.sapCountryCode || '-' }}</el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
           <el-col :span="12"><el-form-item label="SAP客户编码"><el-input v-model="formData.sapCustomerCode" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="账户组"><el-input v-model="formData.sapAccountGroup" disabled /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="国家代码"><el-input v-model="formData.sapCountryCode" disabled /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -207,7 +225,7 @@
 
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { updateCustomer, getCustomerDetail } from '@/api/customer'
+import { updateCustomer, getCustomerDetail, getCustomerPage } from '@/api/customer'
 import { getDeptTree, getUserPage } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AddressPicker from '@/components/common/AddressPicker.vue'
@@ -230,6 +248,8 @@ const isEditing = ref(false)
 const saving = ref(false)
 const addressVerifying = ref(false)
 const addressPickerVisible = ref(false)
+const bundleCustomerLoading = ref(false)
+const bundleCustomerOptions = ref([])
 const formData = ref({})
 const deptTree = ref([])
 const userOptions = ref([])
@@ -249,6 +269,46 @@ const resolveUserName = (id) => {
   return user?.realName || user?.username || id
 }
 
+const formatBundleCustomerLabel = (customer) => {
+  if (!customer) return ''
+  const code = customer.customerCode ? `/${customer.customerCode}` : ''
+  const sap = customer.sapCustomerCode ? ` SAP:${customer.sapCustomerCode}` : ''
+  return `${customer.customerName || customer.customerShortName || customer.id}${code}${sap}`
+}
+
+const addBundleOption = (customer) => {
+  if (!customer?.id) return
+  if (!bundleCustomerOptions.value.some(item => String(item.id) === String(customer.id))) {
+    bundleCustomerOptions.value.push(customer)
+  }
+}
+
+const searchBundleCustomers = async (keyword = '') => {
+  bundleCustomerLoading.value = true
+  try {
+    const res = await getCustomerPage({ current: 1, size: 20, customerName: keyword || '' })
+    bundleCustomerOptions.value = (res?.records || []).filter(item => String(item.id) !== String(props.customerId))
+  } finally {
+    bundleCustomerLoading.value = false
+  }
+}
+
+const handleBundleCustomerChange = (id) => {
+  const selected = bundleCustomerOptions.value.find(item => String(item.id) === String(id))
+  if (!selected) return
+  formData.value.bundleCustomerId = selected.id
+  formData.value.bundleCustomerName = selected.customerName || selected.customerShortName || ''
+  formData.value.bundleCustomerSapCode = selected.sapCustomerCode || ''
+  formData.value.bundleBrand = ''
+}
+
+const clearBundleCustomer = () => {
+  formData.value.bundleCustomerId = null
+  formData.value.bundleCustomerName = ''
+  formData.value.bundleCustomerSapCode = ''
+  formData.value.bundleBrand = ''
+}
+
 const loadOptions = async () => {
   try {
     const [depts, users] = await Promise.all([
@@ -257,6 +317,13 @@ const loadOptions = async () => {
     ])
     deptTree.value = depts || []
     userOptions.value = users?.records || users?.list || users || []
+    if (props.detail?.bundleCustomerId) {
+      addBundleOption({
+        id: props.detail.bundleCustomerId,
+        customerName: props.detail.bundleCustomerName,
+        sapCustomerCode: props.detail.bundleCustomerSapCode
+      })
+    }
   } catch (error) {
     deptTree.value = []
     userOptions.value = []
@@ -306,6 +373,13 @@ const verifyTypedAddress = async () => {
 
 watch(() => props.detail, (val) => {
   formData.value = normalizeCustomerForForm(val)
+  if (val?.bundleCustomerId) {
+    addBundleOption({
+      id: val.bundleCustomerId,
+      customerName: val.bundleCustomerName,
+      sapCustomerCode: val.bundleCustomerSapCode
+    })
+  }
 }, { immediate: true, deep: true })
 
 const handleSave = async () => {

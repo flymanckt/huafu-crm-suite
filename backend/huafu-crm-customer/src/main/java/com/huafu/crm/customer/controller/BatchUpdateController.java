@@ -158,7 +158,7 @@ public class BatchUpdateController {
             text("customerCategory", "customer_category"), text("customerSegment", "customer_segment"),
             integer("businessType", "business_type"), text("customerSource", "customer_source"),
             integer("customerStage", "customer_stage"), integer("riskLevel", "risk_level"),
-            integer("blacklist", "blacklist"), text("salesMerchandiser", "sales_merchandiser"),
+            text("salesMerchandiser", "sales_merchandiser"),
             longField("ownerUserId", "owner_user_id"), longField("ownerDeptId", "owner_dept_id"),
             text("remark", "remark")
         )));

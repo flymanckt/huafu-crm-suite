@@ -39,6 +39,18 @@ class CustomerServiceImplTest {
    c.setId(1001L);
    return 1;
   });
+  when(mapper.selectById(1001L)).thenAnswer(invocation -> {
+   Customer c = new Customer();
+   c.setId(1001L);
+   c.setCustomerCode("HF-001");
+   c.setCustomerName("华孚客户");
+   c.setCustomerShortName("华孚");
+   c.setDistrict("西湖区");
+   c.setBundleCustomerName("捆绑客户");
+   c.setBundleBrand("捆绑品牌");
+   c.setStatus(6);
+   return c;
+  });
 
 	  CustomerCreateDTO dto = new CustomerCreateDTO("HF-001", "华孚客户", "华孚",
 	   1, 2, 6, "浙江", "杭州", "西湖区", "某路1号",
@@ -49,7 +61,7 @@ class CustomerServiceImplTest {
 	   "捆绑客户", "捆绑品牌",
 	   null, null, null, null, null, null, null, null, null, null,
 	   null, null, null, null, null, null, null, null, null, null,
-	   null, null, null, null, null, null, null, null, null);
+	   null, null, null, null, null, null, null, null);
 
   CustomerVO vo = service.create(dto);
 

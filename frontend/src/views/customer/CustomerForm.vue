@@ -25,6 +25,11 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item label="客户名称简称">
+                  <el-input v-model="form.customerShortName" placeholder="请输入客户名称简称" maxlength="128" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
                 <el-form-item v-if="isEdit" label="客户编码" prop="customerCode">
                   <el-input v-model="form.customerCode" placeholder="系统自动生成" disabled />
                 </el-form-item>
@@ -246,6 +251,11 @@
                 <el-col :span="12">
                   <el-form-item label="客户名称" prop="customerName">
                     <el-input v-model="form.customerName" placeholder="请输入客户名称" maxlength="255" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="客户名称简称">
+                    <el-input v-model="form.customerShortName" placeholder="请输入客户名称简称" maxlength="128" />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -537,7 +547,6 @@ const defaultForm = () => ({
   // === SAP ===
   sapCustomerCode: '',
   companyCode: '',
-  salesGroup: '',
   priceList: '',
   currency: '',
   deliveryFactory: '',
@@ -546,12 +555,14 @@ const defaultForm = () => ({
   shipToParty: '',
   soldToParty: '',
   payerParty: '',
-  countryCode: '',
   // === 风险 ===
-  blacklist: null,
   riskLevel: null,
   competitorShareJson: '',
   cooperationBrandJson: '',
+  bundleCustomerName: '',
+  bundleBrand: '',
+  bundleCustomerId: null,
+  bundleCustomerSapCode: '',
   // === 银行/税务 ===
   taxId: '',
   bankName: '',

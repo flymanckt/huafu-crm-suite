@@ -14,7 +14,6 @@
                 <el-tag size="small">{{ customerLabel.type(detail.type) }}</el-tag>
                 <el-tag size="small" :type="customerLevelType[detail.level]">{{ customerLabel.level(detail.level) }}</el-tag>
                 <el-tag size="small" :type="customerStatusType[detail.status]">{{ customerLabel.status(detail.status) }}</el-tag>
-                <el-tag v-if="detail.blacklist === 1" size="small" type="danger">黑名单</el-tag>
               </div>
               <div class="customer-meta">
                 <span v-if="detail.customerCode">编码：{{ detail.customerCode }}</span>

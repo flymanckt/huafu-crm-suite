@@ -359,7 +359,6 @@ const batchFields = [
   { key: 'customerSource', label: '客户来源', dictCode: 'customer_source', valueType: 'number' },
   { key: 'customerStage', label: '客户阶段', dictCode: 'customer_stage', valueType: 'number' },
   { key: 'riskLevel', label: '风险等级', dictCode: 'risk_level', valueType: 'number' },
-  { key: 'blacklist', label: '黑名单', dictCode: 'yes_no', valueType: 'number' },
   { key: 'salesMerchandiser', label: '销售跟单' },
   { key: 'remark', label: '备注' }
 ]

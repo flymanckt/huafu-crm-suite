@@ -39,9 +39,10 @@ public class CustomerServiceImpl implements CustomerService {
         "countryRegion", "mainBrand", "annualYarnVolume",
         "machineCount", "productionCapacity", "industryPosition",
         "mainCustomerGroup", "bundleCustomerName", "bundleBrand",
+        "bundleCustomerId", "bundleCustomerSapCode",
         "salesMerchandiser", "locationLat", "locationLng",
         "unifiedSocialCreditCode", "englishName", "assetType",
-        "customerSource", "customerStage", "blacklist", "riskLevel",
+        "customerSource", "customerStage", "riskLevel",
         "taxId", "bankName", "bankAccount", "invoiceTitle"
     );
 
@@ -126,6 +127,8 @@ public class CustomerServiceImpl implements CustomerService {
         c.setMainCustomerGroup(safeInput(dto.mainCustomerGroup()));
         c.setBundleCustomerName(safeInput(dto.bundleCustomerName()));
         c.setBundleBrand(safeInput(dto.bundleBrand()));
+        c.setBundleCustomerId(dto.bundleCustomerId());
+        c.setBundleCustomerSapCode(safeInput(dto.bundleCustomerSapCode()));
         c.setOwnerDeptId(dto.ownerDeptId());
         c.setSalesMerchandiser(safeInput(dto.salesMerchandiser()));
         c.setLocationLat(dto.locationLat());
@@ -137,14 +140,12 @@ public class CustomerServiceImpl implements CustomerService {
         c.setCustomerStage(dto.customerStage());
         c.setCompetitorShareJson(dto.competitorShareJson());
         c.setCooperationBrandJson(dto.cooperationBrandJson());
-        c.setBlacklist(dto.blacklist());
         c.setRiskLevel(dto.riskLevel());
         c.setTaxId(safeInput(dto.taxId()));
         c.setBankName(safeInput(dto.bankName()));
         c.setBankAccount(safeInput(dto.bankAccount()));
         c.setInvoiceTitle(safeInput(dto.invoiceTitle()));
         c.setCompanyCode(safeInput(dto.companyCode()));
-        c.setSalesGroup(safeInput(dto.salesGroup()));
         c.setPriceList(safeInput(dto.priceList()));
         c.setCurrency(safeInput(dto.currency()));
         c.setDeliveryFactory(safeInput(dto.deliveryFactory()));
@@ -153,7 +154,6 @@ public class CustomerServiceImpl implements CustomerService {
         c.setShipToParty(safeInput(dto.shipToParty()));
         c.setSoldToParty(safeInput(dto.soldToParty()));
         c.setPayerParty(safeInput(dto.payerParty()));
-        c.setCountryCode(safeInput(dto.countryCode()));
         c.setRegion(safeInput(dto.region()));
         mapper.insert(c);
         Customer refreshed = mapper.selectById(c.getId());
@@ -196,8 +196,13 @@ public class CustomerServiceImpl implements CustomerService {
         if (dto.productionCapacity() != null) c.setProductionCapacity(safeInput(dto.productionCapacity()));
         if (dto.industryPosition() != null) c.setIndustryPosition(safeInput(dto.industryPosition()));
         if (dto.mainCustomerGroup() != null) c.setMainCustomerGroup(safeInput(dto.mainCustomerGroup()));
-        if (dto.bundleCustomerName() != null) c.setBundleCustomerName(safeInput(dto.bundleCustomerName()));
+        if (dto.bundleCustomerName() != null) {
+            c.setBundleCustomerName(safeInput(dto.bundleCustomerName()));
+            if (dto.bundleCustomerName().isBlank()) c.setBundleCustomerId(null);
+        }
         if (dto.bundleBrand() != null) c.setBundleBrand(safeInput(dto.bundleBrand()));
+        if (dto.bundleCustomerId() != null) c.setBundleCustomerId(dto.bundleCustomerId());
+        if (dto.bundleCustomerSapCode() != null) c.setBundleCustomerSapCode(safeInput(dto.bundleCustomerSapCode()));
         if (dto.ownerDeptId() != null) c.setOwnerDeptId(dto.ownerDeptId());
         if (dto.salesMerchandiser() != null) c.setSalesMerchandiser(safeInput(dto.salesMerchandiser()));
         if (dto.locationLat() != null) c.setLocationLat(dto.locationLat());
@@ -209,14 +214,12 @@ public class CustomerServiceImpl implements CustomerService {
         if (dto.customerStage() != null) c.setCustomerStage(dto.customerStage());
         if (dto.competitorShareJson() != null) c.setCompetitorShareJson(dto.competitorShareJson());
         if (dto.cooperationBrandJson() != null) c.setCooperationBrandJson(dto.cooperationBrandJson());
-        if (dto.blacklist() != null) c.setBlacklist(dto.blacklist());
         if (dto.riskLevel() != null) c.setRiskLevel(dto.riskLevel());
         if (dto.taxId() != null) c.setTaxId(safeInput(dto.taxId()));
         if (dto.bankName() != null) c.setBankName(safeInput(dto.bankName()));
         if (dto.bankAccount() != null) c.setBankAccount(safeInput(dto.bankAccount()));
         if (dto.invoiceTitle() != null) c.setInvoiceTitle(safeInput(dto.invoiceTitle()));
         if (dto.companyCode() != null) c.setCompanyCode(safeInput(dto.companyCode()));
-        if (dto.salesGroup() != null) c.setSalesGroup(safeInput(dto.salesGroup()));
         if (dto.priceList() != null) c.setPriceList(safeInput(dto.priceList()));
         if (dto.currency() != null) c.setCurrency(safeInput(dto.currency()));
         if (dto.deliveryFactory() != null) c.setDeliveryFactory(safeInput(dto.deliveryFactory()));
@@ -225,7 +228,6 @@ public class CustomerServiceImpl implements CustomerService {
         if (dto.shipToParty() != null) c.setShipToParty(safeInput(dto.shipToParty()));
         if (dto.soldToParty() != null) c.setSoldToParty(safeInput(dto.soldToParty()));
         if (dto.payerParty() != null) c.setPayerParty(safeInput(dto.payerParty()));
-        if (dto.countryCode() != null) c.setCountryCode(safeInput(dto.countryCode()));
         if (dto.region() != null) c.setRegion(safeInput(dto.region()));
         if (c.getVersion() == null) c.setVersion(0);
         mapper.updateById(c);
@@ -458,16 +460,17 @@ public class CustomerServiceImpl implements CustomerService {
             c.getCountryRegion(), c.getMainBrand(), c.getAnnualYarnVolume(),
             c.getMachineCount(), c.getProductionCapacity(), c.getIndustryPosition(),
             c.getMainCustomerGroup(), c.getBundleCustomerName(), c.getBundleBrand(),
+            c.getBundleCustomerId(), c.getBundleCustomerSapCode(),
             c.getOwnerDeptId(), c.getSalesMerchandiser(),
             c.getLocationLat(), c.getLocationLng(),
             c.getUnifiedSocialCreditCode(), c.getEnglishName(), c.getAssetType(),
             c.getCustomerSource(), c.getCustomerStage(),
             c.getCompetitorShareJson(), c.getCooperationBrandJson(),
-            c.getBlacklist(), c.getRiskLevel(),
+            c.getRiskLevel(),
             c.getTaxId(), c.getBankName(), c.getBankAccount(), c.getInvoiceTitle(),
-            c.getCompanyCode(), c.getSalesGroup(), c.getPriceList(), c.getCurrency(),
+            c.getCompanyCode(), c.getPriceList(), c.getCurrency(),
             c.getDeliveryFactory(), c.getAccountAssignmentGroup(), c.getTaxClassification(),
             c.getShipToParty(), c.getSoldToParty(), c.getPayerParty(),
-            c.getCountryCode(), c.getRegion());
+            c.getRegion());
     }
 }

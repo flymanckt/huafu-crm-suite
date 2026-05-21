@@ -212,6 +212,8 @@ export function normalizeCustomerForForm(data = {}) {
     competitorShare: data.competitorShareJson ?? data.competitorShare ?? '',
     bundleCustomerName: data.bundleCustomerName ?? '',
     bundleBrand: data.bundleBrand ?? '',
+    bundleCustomerId: data.bundleCustomerId ?? null,
+    bundleCustomerSapCode: data.bundleCustomerSapCode ?? '',
   }
 }
 
@@ -219,7 +221,7 @@ export function normalizeCustomerForForm(data = {}) {
 // Integer 枚举：直接透传表单 Integer，不做字符串转换
 const INTEGER_ENUM_FIELDS = [
   'type', 'level', 'status', 'businessType', 'customerStage',
-  'machineCount', 'blacklist', 'riskLevel',
+  'machineCount', 'riskLevel',
 ]
 // String 枚举：表单 Integer → API String（如 1 → 'SHANGXIAN'）
 const STRING_ENUM_REVERSE = {
@@ -240,14 +242,14 @@ export function buildCustomerUpdatePayload(source = {}) {
     'sapCustomerCode', 'remark',
     'customerSegment', 'countryRegion', 'mainBrand', 'annualYarnVolume',
     'productionCapacity', 'industryPosition', 'salesMerchandiser',
-    'bundleCustomerName', 'bundleBrand',
+    'bundleCustomerName', 'bundleBrand', 'bundleCustomerId', 'bundleCustomerSapCode',
     'locationLat', 'locationLng', 'unifiedSocialCreditCode',
     'englishName', 'assetType',
     'competitorShareJson', 'cooperationBrandJson',
     'taxId', 'bankName', 'bankAccount', 'invoiceTitle',
-    'companyCode', 'salesGroup', 'priceList', 'currency',
+    'companyCode', 'priceList', 'currency',
     'deliveryFactory', 'accountAssignmentGroup', 'taxClassification',
-    'shipToParty', 'soldToParty', 'payerParty', 'countryCode',
+    'shipToParty', 'soldToParty', 'payerParty',
     'ownerUserId', 'ownerDeptId',
   ]
   directFields.forEach((key) => putIfPresent(payload, key, source[key]))

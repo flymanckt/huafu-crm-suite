@@ -86,7 +86,6 @@
             <el-col :span="8"><div class="field-item"><label>信用额度(万元)</label><value>{{ detail.creditLimit ?? '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>年营业额(万元)</label><value>{{ detail.annualRevenue ?? '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>风险等级</label><value>{{ riskLevelMap[detail.riskLevel] || '-' }}</value></div></el-col>
-            <el-col :span="8"><div class="field-item"><label>是否黑名单</label><value>{{ detail.blacklist === 1 ? '是' : '否' }}</value></div></el-col>
           </el-row>
         </div>
       </el-card>
@@ -103,7 +102,6 @@
           <el-row :gutter="16">
             <el-col :span="8"><div class="field-item"><label>SAP客户编码</label><value>{{ detail.sapCustomerCode || '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>公司代码</label><value>{{ detail.companyCode || '-' }}</value></div></el-col>
-            <el-col :span="8"><div class="field-item"><label>销售组</label><value>{{ detail.salesGroup || '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>价格清单</label><value>{{ detail.priceList || '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>货币</label><value>{{ detail.currency || '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>交货工厂</label><value>{{ detail.deliveryFactory || '-' }}</value></div></el-col>
@@ -144,8 +142,8 @@
           <el-col :span="12"><el-form-item label="省"><el-input v-model="editForm.province" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="市"><el-input v-model="editForm.city" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="区"><el-input v-model="editForm.district" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="捆绑客户"><el-input v-model="editForm.bundleCustomerName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="捆绑品牌"><el-input v-model="editForm.bundleBrand" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="捆绑客户/品牌"><el-input v-model="editForm.bundleCustomerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="捆绑客户SAP代码"><el-input v-model="editForm.bundleCustomerSapCode" disabled /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="详细地址"><el-input v-model="editForm.address" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="开户行"><el-input v-model="editForm.bankName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="账号"><el-input v-model="editForm.bankAccount" /></el-form-item></el-col>
@@ -215,7 +213,7 @@ const openEdit = () => {
     city: props.detail.city || '',
     district: props.detail.district || '',
     bundleCustomerName: props.detail.bundleCustomerName || '',
-    bundleBrand: props.detail.bundleBrand || '',
+    bundleCustomerSapCode: props.detail.bundleCustomerSapCode || '',
     address: props.detail.address || '',
     bankName: props.detail.bankName || '',
     bankAccount: props.detail.bankAccount || '',
