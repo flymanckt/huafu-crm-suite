@@ -338,12 +338,12 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="消息字段">
-              <el-input v-model="interfaceForm.successMessagePath" placeholder="返回消息字段，如 body.message / MESSAGE" />
+              <el-input v-model="interfaceForm.successMessagePath" placeholder="返回消息字段，如 body.message / RETURN[].MESSAGE" />
             </el-form-item>
           </el-col>
           <el-col v-if="['JSON_FIELD','XML_FIELD','SAP_RETURN'].includes(interfaceForm.successRuleType)" :span="12">
             <el-form-item label="判断字段">
-              <el-input v-model="interfaceForm.successFieldPath" placeholder="如 body.code / RETURN.TYPE / TYPE" />
+              <el-input v-model="interfaceForm.successFieldPath" placeholder="如 body.code / RETURN[].TYPE / TYPE" />
             </el-form-item>
           </el-col>
           <el-col v-if="interfaceForm.successRuleType !== 'HTTP_STATUS' && interfaceForm.successRuleType !== 'AUTO'" :span="12">
@@ -770,7 +770,7 @@ const successRuleTypes = [
   { label: '返回文本包含关键字', value: 'TEXT_CONTAINS' },
   { label: 'JSON字段等于指定值', value: 'JSON_FIELD' },
   { label: 'XML字段等于指定值', value: 'XML_FIELD' },
-  { label: 'SAP RETURN消息', value: 'SAP_RETURN' }
+  { label: 'SAP RETURN消息/表', value: 'SAP_RETURN' }
 ]
 const defaultTableField = () => ({
   sourceModule: '',

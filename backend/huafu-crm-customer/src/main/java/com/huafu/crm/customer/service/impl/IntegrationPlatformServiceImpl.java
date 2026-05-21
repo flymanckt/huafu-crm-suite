@@ -48,6 +48,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 @Service
@@ -681,7 +683,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             return evaluateFieldValue(resolveXmlFieldValue(responsePayload, iface.getSuccessFieldPath()), iface, message);
         }
         if ("SAP_RETURN".equals(type) || ("AUTO".equals(type) && "SAP_RFC".equals(iface.getProtocol()))) {
-            return evaluateSapReturn(responsePayload, iface, message);
+            return evaluateSapReturn(responsePayload, iface, null);
         }
         boolean success = httpStatus == null || httpStatus >= 200 && httpStatus < 300;
         return new ResponseDecision(success, StringUtils.hasText(message) ? message : "AUTO规则判断：" + (success ? "成功" : "失败"));
@@ -725,7 +727,19 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
 
     private ResponseDecision evaluateSapReturn(String responsePayload, IntegrationInterface iface, String message) {
         List<String> failureValues = splitValues(StringUtils.hasText(iface.getFailureExpectedValues()) ? iface.getFailureExpectedValues() : "E,A,X");
-        List<String> successValues = splitValues(StringUtils.hasText(iface.getSuccessExpectedValues()) ? iface.getSuccessExpectedValues() : "S");
+        List<String> successValues = splitValues(iface.getSuccessExpectedValues());
+        List<SapReturnRow> returnRows = resolveSapReturnRows(responsePayload, iface);
+        if (!returnRows.isEmpty()) {
+            List<SapReturnRow> failedRows = returnRows.stream()
+                .filter(row -> failureValues.stream().anyMatch(value -> row.type().equalsIgnoreCase(value)))
+                .toList();
+            if (!failedRows.isEmpty()) {
+                return new ResponseDecision(false, StringUtils.hasText(message) ? message : formatSapReturnRows(failedRows));
+            }
+            boolean success = successValues.isEmpty()
+                || returnRows.stream().anyMatch(row -> successValues.stream().anyMatch(value -> row.type().equalsIgnoreCase(value)));
+            return new ResponseDecision(success, StringUtils.hasText(message) ? message : formatSapReturnRows(returnRows));
+        }
         List<String> returnTypes = resolveXmlFieldValues(responsePayload, StringUtils.hasText(iface.getSuccessFieldPath()) ? iface.getSuccessFieldPath() : "TYPE");
         for (String type : returnTypes) {
             if (failureValues.stream().anyMatch(value -> type.equalsIgnoreCase(value))) {
@@ -735,8 +749,56 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if (returnTypes.isEmpty()) {
             return new ResponseDecision(true, StringUtils.hasText(message) ? message : "SAP未返回失败消息");
         }
-        boolean success = returnTypes.stream().anyMatch(type -> successValues.stream().anyMatch(value -> type.equalsIgnoreCase(value)));
+        boolean success = successValues.isEmpty()
+            || returnTypes.stream().anyMatch(type -> successValues.stream().anyMatch(value -> type.equalsIgnoreCase(value)));
         return new ResponseDecision(success, StringUtils.hasText(message) ? message : "SAP RETURN TYPE=" + String.join(",", returnTypes));
+    }
+
+    private List<SapReturnRow> resolveSapReturnRows(String responsePayload, IntegrationInterface iface) {
+        String typePath = StringUtils.hasText(iface.getSuccessFieldPath()) ? iface.getSuccessFieldPath() : "RETURN[].TYPE";
+        String messagePath = StringUtils.hasText(iface.getSuccessMessagePath()) ? iface.getSuccessMessagePath() : "RETURN[].MESSAGE";
+        String typeTag = lastXmlTag(typePath);
+        String messageTag = lastXmlTag(messagePath);
+        try {
+            Document document = parseXmlDocument(responsePayload);
+            NodeList typeNodes = document.getElementsByTagName(typeTag);
+            List<SapReturnRow> rows = new ArrayList<>();
+            for (int i = 0; i < typeNodes.getLength(); i++) {
+                Node typeNode = typeNodes.item(i);
+                String type = text(typeNode);
+                if (!StringUtils.hasText(type)) {
+                    continue;
+                }
+                Element container = nearestElement(typeNode.getParentNode());
+                String message = findText(container, messageTag);
+                rows.add(new SapReturnRow(
+                    type.trim(),
+                    findText(container, "ID"),
+                    firstText(container, List.of("NUMBER", "NO")),
+                    StringUtils.hasText(message) ? message : findText(container, "MESSAGE_V1")
+                ));
+            }
+            return rows;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private String formatSapReturnRows(List<SapReturnRow> rows) {
+        return rows.stream()
+            .limit(8)
+            .map(row -> {
+                String prefix = "TYPE=" + row.type();
+                if (StringUtils.hasText(row.id())) {
+                    prefix += " ID=" + row.id();
+                }
+                if (StringUtils.hasText(row.number())) {
+                    prefix += " NO=" + row.number();
+                }
+                return StringUtils.hasText(row.message()) ? prefix + " " + row.message() : prefix;
+            })
+            .reduce((left, right) -> left + "；" + right)
+            .orElse("SAP RETURN无消息");
     }
 
     private String resolveResponseMessage(String responsePayload, String messagePath) {
@@ -785,13 +847,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             return List.of();
         }
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            factory.setExpandEntityReferences(false);
-            Document document = factory.newDocumentBuilder()
-                .parse(new ByteArrayInputStream(responsePayload.getBytes(StandardCharsets.UTF_8)));
-            String tagName = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
-            tagName = tagName.replace("[]", "");
+            Document document = parseXmlDocument(responsePayload);
+            String tagName = lastXmlTag(path);
             NodeList nodes = document.getElementsByTagName(tagName);
             List<String> values = new ArrayList<>();
             for (int i = 0; i < nodes.getLength(); i++) {
@@ -804,6 +861,56 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         } catch (Exception ignored) {
             return List.of();
         }
+    }
+
+    private Document parseXmlDocument(String responsePayload) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setExpandEntityReferences(false);
+        return factory.newDocumentBuilder()
+            .parse(new ByteArrayInputStream(responsePayload.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private String lastXmlTag(String path) {
+        String tagName = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+        return tagName.replace("[]", "");
+    }
+
+    private Element nearestElement(Node node) {
+        Node current = node;
+        while (current != null && current.getNodeType() != Node.ELEMENT_NODE) {
+            current = current.getParentNode();
+        }
+        return (Element) current;
+    }
+
+    private String firstText(Element element, List<String> tagNames) {
+        for (String tagName : tagNames) {
+            String value = findText(element, tagName);
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String findText(Element element, String tagName) {
+        if (element == null || !StringUtils.hasText(tagName)) {
+            return null;
+        }
+        NodeList nodes = element.getElementsByTagName(tagName);
+        if (nodes.getLength() == 0) {
+            return null;
+        }
+        return text(nodes.item(0));
+    }
+
+    private String text(Node node) {
+        if (node == null || node.getTextContent() == null) {
+            return null;
+        }
+        String value = node.getTextContent().trim();
+        return StringUtils.hasText(value) ? value : null;
     }
 
     private List<String> splitValues(String value) {
@@ -905,6 +1012,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private record ResolvedValue(Object value, boolean usedDefault, boolean missing) {}
 
     private record ResponseDecision(boolean success, String message) {}
+
+    private record SapReturnRow(String type, String id, String number, String message) {}
 
     private SapRfcConfig toSapConfig(SapRfcConfigDTO dto, SapRfcConfig entity) {
         entity.setConfigCode(InputSanitizer.safeText(dto.configCode()));
