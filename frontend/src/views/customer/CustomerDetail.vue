@@ -15,31 +15,16 @@
                 <el-tag size="small" :type="customerLevelType[detail.level]">{{ customerLabel.level(detail.level) }}</el-tag>
                 <el-tag size="small" :type="customerStatusType[detail.status]">{{ customerLabel.status(detail.status) }}</el-tag>
               </div>
-              <div class="customer-meta">
-                <span v-if="detail.customerCode">编码：{{ detail.customerCode }}</span>
-                <span v-if="detail.province || detail.city || detail.district">地址地区：{{ detail.province }}{{ detail.city }}{{ detail.district }}</span>
-                <span v-if="detail.sapCustomerCode">SAP：{{ detail.sapCustomerCode }}</span>
-              </div>
-              <div class="summary-grid">
-                <div class="summary-kpi">
-                  <span>业务类型</span>
-                  <strong>{{ detail.businessType || '-' }}</strong>
-                </div>
-                <div class="summary-kpi">
-                  <span>客户分类</span>
-                  <strong>{{ detail.category || '-' }}</strong>
-                </div>
-                <div class="summary-kpi">
-                  <span>机台数</span>
-                  <strong>{{ detail.machineCount || 0 }}</strong>
-                </div>
-                <div class="summary-kpi">
-                  <span>年销售额</span>
-                  <strong>{{ detail.annualRevenue || '-' }}</strong>
-                </div>
-              </div>
             </div>
             <div class="summary-right">
+              <div class="layout-control">
+                <span>布局</span>
+                <el-radio-group v-model="detailColumns" size="small">
+                  <el-radio-button :value="2">2列</el-radio-button>
+                  <el-radio-button :value="3">3列</el-radio-button>
+                  <el-radio-button :value="4">4列</el-radio-button>
+                </el-radio-group>
+              </div>
               <el-button @click="handleEdit">编辑基础资料</el-button>
               <el-button type="primary" @click="activeTab = '4'">联系人({{ contacts.length }})</el-button>
             </div>
@@ -122,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, provide } from 'vue'
+import { ref, onMounted, provide, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCustomerDetail, getContactListV1 } from '@/api/customer'
 import { DataAnalysis, Document, Grid, User, Connection, OfficeBuilding, Paperclip, Menu, Location } from '@element-plus/icons-vue'
@@ -144,6 +129,7 @@ const detail = ref({})
 const contacts = ref([])
 const activeTab = ref('1')
 const drawerVisible = ref(false)
+const detailColumns = ref(Number(localStorage.getItem('customerDetailColumns') || 3))
 
 const loadData = async () => {
   detail.value = await getCustomerDetail(detailId)
@@ -164,6 +150,13 @@ const handleEdit = () => {
 // Provide detail data to child tabs
 provide('customerDetail', detail)
 provide('reloadDetail', loadData)
+provide('customerDetailColumns', detailColumns)
+
+watch(detailColumns, (value) => {
+  const normalized = [2, 3, 4].includes(Number(value)) ? Number(value) : 3
+  detailColumns.value = normalized
+  localStorage.setItem('customerDetailColumns', String(normalized))
+}, { immediate: true })
 
 onMounted(() => { loadData(); loadContacts() })
 </script>
@@ -190,39 +183,15 @@ onMounted(() => { loadData(); loadContacts() })
   margin-bottom: 8px;
 }
 .customer-tags { display: flex; gap: 6px; margin-bottom: 8px; }
-.customer-meta {
+.summary-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.layout-control {
   display: flex;
-  gap: 20px;
+  align-items: center;
+  gap: 8px;
+  margin-right: 6px;
+  color: #606266;
   font-size: 13px;
-  color: #666;
 }
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(110px, 1fr));
-  gap: 10px;
-  margin-top: 14px;
-  max-width: 760px;
-}
-.summary-kpi {
-  padding: 10px 12px;
-  background: #f7f9fc;
-  border: 1px solid #edf0f5;
-  border-radius: 6px;
-}
-.summary-kpi span {
-  display: block;
-  font-size: 12px;
-  color: #7a8494;
-  margin-bottom: 4px;
-}
-.summary-kpi strong {
-  display: block;
-  min-height: 20px;
-  font-size: 14px;
-  color: #1f2937;
-  font-weight: 600;
-}
-.summary-right { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* 主体区 - 顶部Tab样式 */
 .detail-top-tabs {
@@ -289,10 +258,9 @@ onMounted(() => { loadData(); loadContacts() })
   .detail-content { padding: 12px; }
   .detail-left-tabs { display: none; }
   .summary-card { flex-direction: column; }
-  .summary-right { width: 100%; }
+  .summary-right { width: 100%; flex-wrap: wrap; }
   .summary-right .el-button { flex: 1; }
-  .customer-meta { flex-direction: column; gap: 6px; }
-  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .layout-control { width: 100%; margin-right: 0; justify-content: space-between; }
 }
 
 /* Drawer tabs */

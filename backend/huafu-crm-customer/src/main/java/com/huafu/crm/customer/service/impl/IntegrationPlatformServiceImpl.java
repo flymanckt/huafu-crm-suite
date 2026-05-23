@@ -33,6 +33,7 @@ import com.huafu.crm.customer.service.sap.SapJcoResult;
 import com.huafu.crm.customer.service.sap.SapJcoService;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -60,11 +61,12 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<List<Map<String, Object>>> TABLE_FIELD_LIST_TYPE = new TypeReference<>() {};
     private static final Set<String> SAP_PROTOCOLS = Set.of("SAP_RFC", "SAP_ODATA", "SAP_IDOC");
-    private static final Set<String> GENERIC_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SFTP", "FTP", "DATABASE", "KAFKA", "RABBITMQ", "CUSTOM");
+    private static final Set<String> GENERIC_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "WECOM", "SFTP", "FTP", "DATABASE", "KAFKA", "RABBITMQ", "CUSTOM");
     private static final Set<String> PARAMETER_MODES = Set.of("SINGLE", "TABLE");
     private static final Set<String> MAPPING_DIRECTIONS = Set.of("OUTBOUND", "INBOUND", "BIDIRECTIONAL");
-    private static final Set<String> HTTP_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "SAP_ODATA");
+    private static final Set<String> HTTP_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "WECOM", "SAP_ODATA");
     private static final Set<String> SUCCESS_RULE_TYPES = Set.of("AUTO", "HTTP_STATUS", "TEXT_CONTAINS", "JSON_FIELD", "XML_FIELD", "SAP_RETURN");
+    private static final Set<String> TRIGGER_MODES = Set.of("MANUAL", "ON_CREATE", "ON_UPDATE", "ON_SAVE", "ON_DELETE", "CUSTOM");
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final IntegrationConnectionConfigMapper connectionMapper;
@@ -158,7 +160,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             throw new BizException(1001, "连接类型不能为空");
         }
         String type = cfg.getConnectionType();
-        if (("REST".equals(type) || "SOAP".equals(type) || "WEBHOOK".equals(type) || "SAP_ODATA".equals(type))
+        if (("REST".equals(type) || "SOAP".equals(type) || "WEBHOOK".equals(type) || "WECOM".equals(type) || "SAP_ODATA".equals(type))
             && !StringUtils.hasText(cfg.getBaseUrl())) {
             throw new BizException(1001, "HTTP类连接必须配置Base URL");
         }
@@ -468,7 +470,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         updateMappingDetail(log.getId(), buildMappingDetail(log.getRequestPayload(), outboundMappings));
         String protocol = iface.getProtocol();
         if (HTTP_PROTOCOLS.contains(protocol)) {
-            return executeHttp(iface, log);
+            return executeHttp(iface, log, outboundMappings);
         }
         if ("SAP_RFC".equals(protocol)) {
             return executeSapRfc(iface, log, outboundMappings);
@@ -476,7 +478,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         return ExecuteResult.failed("接口协议暂未接入执行器：" + protocol, false);
     }
 
-    private ExecuteResult executeHttp(IntegrationInterface iface, IntegrationLog log) {
+    private ExecuteResult executeHttp(IntegrationInterface iface, IntegrationLog log, List<IntegrationFieldMapping> mappings) {
         IntegrationConnectionConfig connection = findConnection(iface.getConnectionCode());
         if (connection == null) {
             return ExecuteResult.failed("连接配置不存在或未启用：" + iface.getConnectionCode(), false);
@@ -487,17 +489,26 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         try {
             String method = StringUtils.hasText(iface.getHttpMethod()) ? iface.getHttpMethod().toUpperCase() : "POST";
             String contentType = StringUtils.hasText(iface.getContentType()) ? iface.getContentType() : "application/json";
-            String url = joinUrl(connection.getBaseUrl(), iface.getEndpointPath());
+            HttpMappedPayload mappedPayload = buildHttpMappedPayload(log.getRequestPayload(), mappings);
+            String url = appendQueryParams(joinUrl(connection.getBaseUrl(), iface.getEndpointPath()), mappedPayload.queryParams());
+            String body = mappedPayload.body();
+            if (isWeComWebhook(iface, connection)) {
+                method = "POST";
+                contentType = "application/json";
+                url = buildWeComWebhookUrl(connection, iface);
+                body = buildWeComWebhookBody(body, connection);
+            }
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofMillis(connection.getTimeoutMs() == null ? 30000 : connection.getTimeoutMs()))
                 .header("Content-Type", contentType);
             applyHeaders(builder, connection.getHeaderConfig());
+            mappedPayload.headers().forEach(builder::header);
             applyAuth(builder, connection);
             if ("GET".equals(method)) {
                 builder.GET();
             } else {
-                builder.method(method, HttpRequest.BodyPublishers.ofString(log.getRequestPayload() == null ? "" : log.getRequestPayload(), StandardCharsets.UTF_8));
+                builder.method(method, HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
             }
             HttpResponse<String> response = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connection.getTimeoutMs() == null ? 30000 : connection.getTimeoutMs()))
@@ -512,6 +523,228 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         } catch (Exception ex) {
             return ExecuteResult.failed("HTTP调用异常：" + ex.getMessage(), true);
         }
+    }
+
+    private HttpMappedPayload buildHttpMappedPayload(String sourcePayload, List<IntegrationFieldMapping> mappings) {
+        if (mappings == null || mappings.isEmpty()) {
+            return new HttpMappedPayload(sourcePayload == null ? "" : sourcePayload, Map.of(), Map.of());
+        }
+        try {
+            JsonNode root = StringUtils.hasText(sourcePayload)
+                ? OBJECT_MAPPER.readTree(sourcePayload)
+                : OBJECT_MAPPER.createObjectNode();
+            Map<String, Object> body = new LinkedHashMap<>();
+            Map<String, String> queryParams = new LinkedHashMap<>();
+            Map<String, String> headers = new LinkedHashMap<>();
+            boolean mapped = false;
+            for (IntegrationFieldMapping mapping : mappings) {
+                if ("TABLE".equals(mapping.getParameterMode())) {
+                    mapped = appendMappedTable(body, root, mapping) || mapped;
+                } else {
+                    ResolvedValue resolved = resolveMappingValue(root, mapping.getSourceModule(), mapping.getSourceField(), mapping.getDefaultValue(), 0);
+                    if (resolved.value() == null || !StringUtils.hasText(mapping.getTargetField())) {
+                        continue;
+                    }
+                    String location = StringUtils.hasText(mapping.getParameterGroup()) ? mapping.getParameterGroup().trim().toLowerCase() : "body";
+                    if ("query".equals(location)) {
+                        queryParams.put(mapping.getTargetField(), String.valueOf(resolved.value()));
+                    } else if ("header".equals(location) || "headers".equals(location)) {
+                        headers.put(mapping.getTargetField(), String.valueOf(resolved.value()));
+                    } else {
+                        putNestedValue(body, normalizeHttpTargetPath(mapping.getTargetField()), resolved.value());
+                    }
+                    mapped = true;
+                }
+            }
+            String bodyPayload = mapped && !body.isEmpty() ? toJson(body) : (sourcePayload == null ? "" : sourcePayload);
+            return new HttpMappedPayload(bodyPayload, queryParams, headers);
+        } catch (Exception ex) {
+            throw new BizException(1001, "HTTP接口字段映射生成失败：" + ex.getMessage());
+        }
+    }
+
+    private boolean isWeComWebhook(IntegrationInterface iface, IntegrationConnectionConfig connection) {
+        return "WECOM".equals(iface.getProtocol()) || "WECOM".equals(connection.getConnectionType());
+    }
+
+    private String buildWeComWebhookUrl(IntegrationConnectionConfig connection, IntegrationInterface iface) throws Exception {
+        String url = joinUrl(connection.getBaseUrl(), iface.getEndpointPath());
+        Map<String, Object> auth = readAuthConfig(connection);
+        String key = firstTextValue(auth, List.of("key", "robotKey", "webhookKey"));
+        if (!StringUtils.hasText(key) || url.contains("key=")) {
+            return url;
+        }
+        return appendQueryParams(url, Map.of("key", key));
+    }
+
+    private String buildWeComWebhookBody(String sourceBody, IntegrationConnectionConfig connection) throws Exception {
+        Map<String, Object> auth = readAuthConfig(connection);
+        if (StringUtils.hasText(sourceBody)) {
+            try {
+                JsonNode node = OBJECT_MAPPER.readTree(sourceBody);
+                if (node.hasNonNull("msgtype")) {
+                    return sourceBody;
+                }
+                String content = node.hasNonNull("content") ? node.path("content").asText() : node.toString();
+                return toJson(defaultWeComMessage(content, auth));
+            } catch (Exception ignored) {
+                return toJson(defaultWeComMessage(sourceBody, auth));
+            }
+        }
+        return toJson(defaultWeComMessage(firstTextValue(auth, List.of("defaultContent", "content")), auth));
+    }
+
+    private Map<String, Object> defaultWeComMessage(String content, Map<String, Object> auth) {
+        String msgType = firstTextValue(auth, List.of("defaultMsgType", "msgType"));
+        if (!StringUtils.hasText(msgType)) {
+            msgType = "text";
+        }
+        String safeContent = StringUtils.hasText(content) ? content : "CRM通知";
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("msgtype", msgType);
+        if ("markdown".equalsIgnoreCase(msgType)) {
+            body.put("markdown", Map.of("content", safeContent));
+            return body;
+        }
+        Map<String, Object> text = new LinkedHashMap<>();
+        text.put("content", safeContent);
+        List<String> mentionedList = stringList(auth.get("mentionedList"));
+        List<String> mentionedMobileList = stringList(auth.get("mentionedMobileList"));
+        if (!mentionedList.isEmpty()) {
+            text.put("mentioned_list", mentionedList);
+        }
+        if (!mentionedMobileList.isEmpty()) {
+            text.put("mentioned_mobile_list", mentionedMobileList);
+        }
+        body.put("text", text);
+        return body;
+    }
+
+    private Map<String, Object> readAuthConfig(IntegrationConnectionConfig connection) throws Exception {
+        return StringUtils.hasText(connection.getAuthConfig())
+            ? OBJECT_MAPPER.readValue(connection.getAuthConfig(), MAP_TYPE)
+            : Map.of();
+    }
+
+    private String firstTextValue(Map<String, Object> source, List<String> keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value != null && StringUtils.hasText(String.valueOf(value))) {
+                return String.valueOf(value);
+            }
+        }
+        return null;
+    }
+
+    private List<String> stringList(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(String::valueOf).map(String::trim).filter(StringUtils::hasText).toList();
+        }
+        return Arrays.stream(String.valueOf(value).split(","))
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .toList();
+    }
+
+    private boolean appendMappedTable(Map<String, Object> body, JsonNode root, IntegrationFieldMapping mapping) throws Exception {
+        if (!StringUtils.hasText(mapping.getParameterGroup()) || !StringUtils.hasText(mapping.getTableFieldMappings())) {
+            return false;
+        }
+        List<Map<String, Object>> fields = OBJECT_MAPPER.readValue(mapping.getTableFieldMappings(), TABLE_FIELD_LIST_TYPE);
+        int rowCount = Math.max(1, inferTableRowCount(root, fields));
+        List<Map<String, Object>> tableRows = new ArrayList<>();
+        for (int i = 0; i < rowCount; i++) {
+            Map<String, Object> tableRow = new LinkedHashMap<>();
+            for (Map<String, Object> field : fields) {
+                String targetField = stringValue(field.get("targetField"));
+                if (!StringUtils.hasText(targetField)) {
+                    continue;
+                }
+                ResolvedValue resolved = resolveMappingValue(
+                    root,
+                    stringValue(field.get("sourceModule")),
+                    stringValue(field.get("sourceField")),
+                    stringValue(field.get("defaultValue")),
+                    i
+                );
+                if (resolved.value() != null) {
+                    putNestedValue(tableRow, normalizeHttpTargetPath(targetField), resolved.value());
+                }
+            }
+            if (!tableRow.isEmpty()) {
+                tableRows.add(tableRow);
+            }
+        }
+        if (tableRows.isEmpty()) {
+            return false;
+        }
+        putNestedValue(body, normalizeHttpTargetPath(mapping.getParameterGroup()), tableRows);
+        return true;
+    }
+
+    private String normalizeHttpTargetPath(String targetField) {
+        if (!StringUtils.hasText(targetField)) {
+            return targetField;
+        }
+        String normalized = targetField.trim();
+        if (normalized.startsWith("body.")) {
+            return normalized.substring("body.".length());
+        }
+        if (normalized.startsWith("$."))
+        {
+            return normalized.substring(2);
+        }
+        return normalized;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void putNestedValue(Map<String, Object> target, String path, Object value) {
+        if (!StringUtils.hasText(path)) {
+            return;
+        }
+        String[] parts = path.split("\\.");
+        Map<String, Object> current = target;
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (!StringUtils.hasText(part)) {
+                continue;
+            }
+            if (i == parts.length - 1) {
+                current.put(part, value);
+                return;
+            }
+            Object next = current.get(part);
+            if (!(next instanceof Map)) {
+                next = new LinkedHashMap<String, Object>();
+                current.put(part, next);
+            }
+            current = (Map<String, Object>) next;
+        }
+    }
+
+    private String appendQueryParams(String url, Map<String, String> queryParams) {
+        if (queryParams == null || queryParams.isEmpty()) {
+            return url;
+        }
+        StringBuilder builder = new StringBuilder(url);
+        builder.append(url.contains("?") ? "&" : "?");
+        boolean first = true;
+        for (Map.Entry<String, String> entry : queryParams.entrySet()) {
+            if (!StringUtils.hasText(entry.getKey())) {
+                continue;
+            }
+            if (!first) {
+                builder.append("&");
+            }
+            builder.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8));
+            builder.append("=");
+            builder.append(URLEncoder.encode(entry.getValue() == null ? "" : entry.getValue(), StandardCharsets.UTF_8));
+            first = false;
+        }
+        return builder.toString();
     }
 
     private ExecuteResult executeSapRfc(IntegrationInterface iface, IntegrationLog log, List<IntegrationFieldMapping> mappings) {
@@ -744,6 +977,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if (sourceField.startsWith("customer.")
             || sourceField.startsWith("sapInfo.")
             || sourceField.startsWith("sapInfos[].")
+            || sourceField.startsWith("allSapInfos[].")
             || sourceField.startsWith("sapOrgs[].")
             || sourceField.startsWith("payload.")) {
             return sourceField;
@@ -760,6 +994,9 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if ("customerSapInfo".equals(sourceModule)) {
             return "sapInfos[]." + sourceField;
         }
+        if ("customerSapInfoAll".equals(sourceModule)) {
+            return "allSapInfos[]." + sourceField;
+        }
         if ("customerSapOrg".equals(sourceModule)) {
             return "sapOrgs[]." + sourceField;
         }
@@ -769,6 +1006,11 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private ResponseDecision evaluateResponseSuccess(IntegrationInterface iface, String responsePayload, Integer httpStatus) {
         String type = StringUtils.hasText(iface.getSuccessRuleType()) ? iface.getSuccessRuleType() : "AUTO";
         String message = resolveResponseMessage(responsePayload, iface.getSuccessMessagePath());
+        if ("AUTO".equals(type) && "WECOM".equals(iface.getProtocol())) {
+            String errCode = resolveJsonResponseValue(responsePayload, "body.errcode");
+            boolean success = "0".equals(errCode);
+            return new ResponseDecision(success, StringUtils.hasText(message) ? message : "企微机器人返回 errcode=" + errCode);
+        }
         if ("HTTP_STATUS".equals(type) || ("AUTO".equals(type) && HTTP_PROTOCOLS.contains(iface.getProtocol()) && !"SAP_ODATA".equals(iface.getProtocol()))) {
             boolean success = httpStatus != null && httpStatus >= 200 && httpStatus < 300;
             return new ResponseDecision(success, StringUtils.hasText(message) ? message : "HTTP状态码：" + httpStatus);
@@ -1144,6 +1386,9 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         entity.setHttpMethod(InputSanitizer.safeText(dto.httpMethod()));
         entity.setEndpointPath(InputSanitizer.safeText(dto.endpointPath()));
         entity.setContentType(InputSanitizer.safeText(dto.contentType()));
+        entity.setTriggerMode(StringUtils.hasText(dto.triggerMode()) ? InputSanitizer.safeText(dto.triggerMode()) : "MANUAL");
+        entity.setTriggerResource(InputSanitizer.safeText(dto.triggerResource()));
+        entity.setTriggerConditionJson(StringUtils.hasText(dto.triggerConditionJson()) ? InputSanitizer.rejectUnsafeHtml(dto.triggerConditionJson()) : null);
         entity.setEnabled(dto.enabled() == null ? (short) 1 : dto.enabled());
         entity.setRetryLimit(dto.retryLimit() == null ? 3 : dto.retryLimit());
         entity.setSuccessRuleType(StringUtils.hasText(dto.successRuleType()) ? InputSanitizer.safeText(dto.successRuleType()) : "AUTO");
@@ -1158,11 +1403,22 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private void validateInterfaceConfig(IntegrationInterfaceDTO dto) {
         String protocol = StringUtils.hasText(dto.protocol()) ? dto.protocol().trim() : "";
         String successRuleType = StringUtils.hasText(dto.successRuleType()) ? dto.successRuleType().trim() : "AUTO";
+        String triggerMode = StringUtils.hasText(dto.triggerMode()) ? dto.triggerMode().trim() : "MANUAL";
         if (!SAP_PROTOCOLS.contains(protocol) && !GENERIC_PROTOCOLS.contains(protocol)) {
             throw new BizException(1001, "不支持的接口协议：" + dto.protocol());
         }
         if (!SUCCESS_RULE_TYPES.contains(successRuleType)) {
             throw new BizException(1001, "不支持的成功判断规则：" + dto.successRuleType());
+        }
+        if (!TRIGGER_MODES.contains(triggerMode)) {
+            throw new BizException(1001, "不支持的触发模式：" + dto.triggerMode());
+        }
+        if (StringUtils.hasText(dto.triggerConditionJson())) {
+            try {
+                OBJECT_MAPPER.readTree(dto.triggerConditionJson());
+            } catch (Exception ex) {
+                throw new BizException(1001, "触发条件JSON格式不正确");
+            }
         }
         if (("JSON_FIELD".equals(successRuleType) || "XML_FIELD".equals(successRuleType)) && !StringUtils.hasText(dto.successFieldPath())) {
             throw new BizException(1001, "字段规则需要填写成功判断字段路径");
@@ -1346,6 +1602,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     }
 
     private record SapCusBusinessKey(Long customerId, Long sapInfoId) {}
+
+    private record HttpMappedPayload(String body, Map<String, String> queryParams, Map<String, String> headers) {}
 
     private Long currentUserId() {
         return userContext.getCurrentUserId().orElse(1L);

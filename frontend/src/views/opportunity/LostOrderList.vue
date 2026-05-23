@@ -6,6 +6,7 @@
           <span>丢单记录</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
+            <ExcelImportButton module-name="丢单记录" :fields="importFields" :import-fn="importLostOrderRow" :export-rows="tableData" @done="loadData" />
             <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新增丢单</el-button>
           </div>
         </div>
@@ -84,6 +85,7 @@ import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -119,6 +121,19 @@ const showDialog = ref(false)
 const editingId = ref(null)
 const defaultForm = () => ({ opportunityId: null, customerId: null, lostType: 1, competitorName: '', competitorPrice: null, ourPrice: null, marginDiff: null, competitorDiscount: null, ourDiscount: null, reasonDetail: '', recoveryPossible: null, followUpDate: null, handlerUserId: null })
 const form = ref(defaultForm())
+const importFields = [
+  { key: 'opportunityId', label: '商机ID', type: 'number' },
+  { key: 'customerId', label: '客户ID', type: 'number' },
+  { key: 'lostType', label: '丢单原因', type: 'number', valueMap: { 价格: 1, 交期: 2, 质量: 3, 现货: 4, 其他: 5 }, example: '价格' },
+  { key: 'competitorName', label: '竞品名称', example: '竞品A' },
+  { key: 'competitorPrice', label: '竞品价格', type: 'number' },
+  { key: 'ourPrice', label: '我方报价', type: 'number' },
+  { key: 'marginDiff', label: '毛利差', type: 'number' },
+  { key: 'recoveryPossible', label: '挽回可能', type: 'number', valueMap: { 可能: 1, 不可能: 2 }, example: '可能' },
+  { key: 'followUpDate', label: '跟进日期', type: 'date', example: '2026-06-01' },
+  { key: 'reasonDetail', label: '详细原因' }
+]
+const importLostOrderRow = (row) => createLostOrder({ ...defaultForm(), ...row })
 const batchFields = [
   { key: 'lostType', label: '丢单原因', dictCode: 'lost_type', valueType: 'number' },
   { key: 'recoveryPossible', label: '挽回可能', dictCode: 'recovery_possible', valueType: 'number' },

@@ -66,6 +66,7 @@
             <el-input v-model="interfaceQuery.keyword" placeholder="接口编码/名称/函数" clearable style="width:260px" @keyup.enter="loadInterfaces" />
             <el-select v-model="interfaceQuery.systemCode" placeholder="系统" clearable style="width:140px">
               <el-option label="SAP" value="SAP" />
+              <el-option label="企微" value="WECOM" />
               <el-option label="CRM" value="CRM" />
               <el-option label="外部系统" value="EXTERNAL" />
             </el-select>
@@ -79,6 +80,11 @@
             </el-table-column>
             <el-table-column prop="connectionCode" label="连接" width="130" />
             <el-table-column prop="direction" label="方向" width="120" />
+            <el-table-column label="触发" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ triggerModeLabel(row.triggerMode) }}<span v-if="row.triggerResource"> / {{ triggerResourceLabel(row.triggerResource) }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="sapFunctionName" label="SAP函数/对象" min-width="160" show-overflow-tooltip />
             <el-table-column prop="endpointPath" label="接口路径" min-width="180" show-overflow-tooltip />
             <el-table-column label="启用" width="80">
@@ -103,6 +109,13 @@
             </el-select>
             <el-button type="primary" :disabled="!selectedInterfaceId" @click="openMapping()">新增映射</el-button>
           </div>
+          <el-alert
+            class="detail-sync-scope-alert"
+            title="明细字段支持“本次变更明细”和“全部明细”：任意接口协议被明细保存触发时，优先选择本次变更明细，只推当前新增或编辑的那一条；需要全量同步时再选择全部明细。"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
           <el-table :data="mappings" v-loading="loading" border stripe max-height="calc(100vh - 330px)">
             <el-table-column prop="sortOrder" label="序号" width="80" />
             <el-table-column prop="parameterMode" label="传参模式" width="100">
@@ -189,7 +202,16 @@
           <el-col :span="12"><el-form-item label="连接类型"><el-select v-model="connectionForm.connectionType" style="width:100%"><el-option v-for="item in connectionTypes" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="认证方式"><el-select v-model="connectionForm.authType" style="width:100%"><el-option v-for="item in authTypes" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="地址/主机"><el-input v-model="connectionForm.baseUrl" placeholder="https://api.example.com 或 主机地址" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="认证配置"><el-input v-model="connectionForm.authConfig" type="textarea" :rows="3" placeholder='JSON，如 {"token":"***"}' /></el-form-item></el-col>
+          <el-col v-if="connectionForm.connectionType === 'WECOM'" :span="24">
+            <el-alert
+              class="interface-alert"
+              title="企微连接按群机器人 Webhook 模式配置：地址填写机器人 Webhook 完整地址，也可把 key 单独填在认证配置中。接口定义里选择企微协议后即可配置消息字段映射和平台日志。"
+              type="info"
+              show-icon
+              :closable="false"
+            />
+          </el-col>
+          <el-col :span="24"><el-form-item label="认证配置"><el-input v-model="connectionForm.authConfig" type="textarea" :rows="3" :placeholder="connectionAuthPlaceholder" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="请求头"><el-input v-model="connectionForm.headerConfig" type="textarea" :rows="2" placeholder='JSON，如 {"Content-Type":"application/json"}' /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="超时毫秒"><el-input-number v-model="connectionForm.timeoutMs" :min="1000" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="启用"><el-switch v-model="connectionForm.enabled" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
@@ -244,6 +266,7 @@
             <el-form-item label="系统">
               <el-select v-model="interfaceForm.systemCode" style="width:100%" filterable allow-create default-first-option>
                 <el-option label="SAP" value="SAP" />
+                <el-option label="企微" value="WECOM" />
                 <el-option label="CRM" value="CRM" />
                 <el-option label="外部系统" value="EXTERNAL" />
               </el-select>
@@ -329,6 +352,30 @@
 
           <el-col :span="12"><el-form-item label="重试次数"><el-input-number v-model="interfaceForm.retryLimit" :min="0" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="启用"><el-switch v-model="interfaceForm.enabled" :active-value="1" :inactive-value="0" /></el-form-item></el-col>
+          <el-col :span="8">
+            <el-form-item label="触发模式">
+              <el-select v-model="interfaceForm.triggerMode" style="width:100%">
+                <el-option v-for="item in triggerModes" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="触发对象">
+              <el-select v-model="interfaceForm.triggerResource" style="width:100%" clearable filterable allow-create default-first-option>
+                <el-option v-for="item in triggerResources" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="触发条件">
+              <el-input
+                v-model="interfaceForm.triggerConditionJson"
+                type="textarea"
+                :rows="2"
+                placeholder='JSON，如 {"field":"accountGroup","operator":"notEmpty"}'
+              />
+            </el-form-item>
+          </el-col>
           <el-col :span="12">
             <el-form-item label="成功判断">
               <el-select v-model="interfaceForm.successRuleType" style="width:100%">
@@ -400,6 +447,26 @@
               <el-select v-model="mappingForm.sourceModule" style="width:100%" filterable @change="handleMappingModuleChange">
                 <el-option v-for="item in crmModuleOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="明细数据范围">
+              <div class="detail-scope-actions">
+                <el-button
+                  size="small"
+                  :type="mappingForm.sourceModule === 'customerSapInfo' ? 'primary' : 'default'"
+                  @click="setDetailScope('current')"
+                >
+                  本次变更明细
+                </el-button>
+                <el-button
+                  size="small"
+                  :type="mappingForm.sourceModule === 'customerSapInfoAll' ? 'primary' : 'default'"
+                  @click="setDetailScope('all')"
+                >
+                  全部明细
+                </el-button>
+              </div>
             </el-form-item>
           </el-col>
           <el-col v-if="!isTableMapping" :span="12">
@@ -623,6 +690,9 @@ const defaultInterface = () => ({
   contentType: 'application/json',
   enabled: 1,
   retryLimit: 3,
+  triggerMode: 'MANUAL',
+  triggerResource: '',
+  triggerConditionJson: '',
   successRuleType: 'AUTO',
   successFieldPath: '',
   successExpectedValues: '',
@@ -726,24 +796,45 @@ const customerFields = [
 ]
 
 const customerSapInfoFields = [
-  { key: 'sapInfos[].id', label: 'SAP信息ID', type: 'number' },
-  { key: 'sapInfos[].tenantId', label: 'SAP信息-租户ID', type: 'number' },
-  { key: 'sapInfos[].customerId', label: 'SAP信息-客户ID', type: 'number' },
-  { key: 'sapInfos[].sapCode', label: 'SAP信息-SAP编号' },
-  { key: 'sapInfos[].accountGroup', label: 'SAP信息-账户组' },
-  { key: 'sapInfos[].countryCode', label: 'SAP信息-国家代码' },
-  { key: 'sapInfos[].companyCode', label: 'SAP信息-公司代码' },
-  { key: 'sapInfos[].salesOrg', label: 'SAP信息-销售组织' },
-  { key: 'sapInfos[].distributionChannel', label: 'SAP信息-分销渠道' },
-  { key: 'sapInfos[].division', label: 'SAP信息-产品组' },
-  { key: 'sapInfos[].description', label: 'SAP信息-说明' },
-  { key: 'sapInfos[].isDefault', label: 'SAP信息-是否默认', type: 'number' },
-  { key: 'sapInfos[].version', label: 'SAP信息-版本号', type: 'number' },
-  { key: 'sapInfos[].createdBy', label: 'SAP信息-创建人' },
-  { key: 'sapInfos[].createdTime', label: 'SAP信息-创建时间', type: 'datetime' },
-  { key: 'sapInfos[].updatedBy', label: 'SAP信息-更新人' },
-  { key: 'sapInfos[].updatedTime', label: 'SAP信息-更新时间', type: 'datetime' },
-  { key: 'sapInfos[].deleted', label: 'SAP信息-删除标记', type: 'number' }
+  { key: 'sapInfos[].id', label: '本次同步SAP信息-ID', type: 'number' },
+  { key: 'sapInfos[].tenantId', label: '本次同步SAP信息-租户ID', type: 'number' },
+  { key: 'sapInfos[].customerId', label: '本次同步SAP信息-客户ID', type: 'number' },
+  { key: 'sapInfos[].sapCode', label: '本次同步SAP信息-SAP编号' },
+  { key: 'sapInfos[].accountGroup', label: '本次同步SAP信息-账户组' },
+  { key: 'sapInfos[].countryCode', label: '本次同步SAP信息-国家代码' },
+  { key: 'sapInfos[].companyCode', label: '本次同步SAP信息-公司代码' },
+  { key: 'sapInfos[].salesOrg', label: '本次同步SAP信息-销售组织' },
+  { key: 'sapInfos[].distributionChannel', label: '本次同步SAP信息-分销渠道' },
+  { key: 'sapInfos[].division', label: '本次同步SAP信息-产品组' },
+  { key: 'sapInfos[].description', label: '本次同步SAP信息-说明' },
+  { key: 'sapInfos[].isDefault', label: '本次同步SAP信息-是否默认', type: 'number' },
+  { key: 'sapInfos[].version', label: '本次同步SAP信息-版本号', type: 'number' },
+  { key: 'sapInfos[].createdBy', label: '本次同步SAP信息-创建人' },
+  { key: 'sapInfos[].createdTime', label: '本次同步SAP信息-创建时间', type: 'datetime' },
+  { key: 'sapInfos[].updatedBy', label: '本次同步SAP信息-更新人' },
+  { key: 'sapInfos[].updatedTime', label: '本次同步SAP信息-更新时间', type: 'datetime' },
+  { key: 'sapInfos[].deleted', label: '本次同步SAP信息-删除标记', type: 'number' }
+]
+
+const allCustomerSapInfoFields = [
+  { key: 'allSapInfos[].id', label: '全部SAP信息-ID', type: 'number' },
+  { key: 'allSapInfos[].tenantId', label: '全部SAP信息-租户ID', type: 'number' },
+  { key: 'allSapInfos[].customerId', label: '全部SAP信息-客户ID', type: 'number' },
+  { key: 'allSapInfos[].sapCode', label: '全部SAP信息-SAP编号' },
+  { key: 'allSapInfos[].accountGroup', label: '全部SAP信息-账户组' },
+  { key: 'allSapInfos[].countryCode', label: '全部SAP信息-国家代码' },
+  { key: 'allSapInfos[].companyCode', label: '全部SAP信息-公司代码' },
+  { key: 'allSapInfos[].salesOrg', label: '全部SAP信息-销售组织' },
+  { key: 'allSapInfos[].distributionChannel', label: '全部SAP信息-分销渠道' },
+  { key: 'allSapInfos[].division', label: '全部SAP信息-产品组' },
+  { key: 'allSapInfos[].description', label: '全部SAP信息-说明' },
+  { key: 'allSapInfos[].isDefault', label: '全部SAP信息-是否默认', type: 'number' },
+  { key: 'allSapInfos[].version', label: '全部SAP信息-版本号', type: 'number' },
+  { key: 'allSapInfos[].createdBy', label: '全部SAP信息-创建人' },
+  { key: 'allSapInfos[].createdTime', label: '全部SAP信息-创建时间', type: 'datetime' },
+  { key: 'allSapInfos[].updatedBy', label: '全部SAP信息-更新人' },
+  { key: 'allSapInfos[].updatedTime', label: '全部SAP信息-更新时间', type: 'datetime' },
+  { key: 'allSapInfos[].deleted', label: '全部SAP信息-删除标记', type: 'number' }
 ]
 
 const customerSapOrgFields = [
@@ -779,6 +870,7 @@ const baseRecordFields = [
 const crmModuleFieldMap = {
   customer: customerFields,
   customerSapInfo: customerSapInfoFields,
+  customerSapInfoAll: allCustomerSapInfoFields,
   customerSapOrg: customerSapOrgFields,
   ...Object.fromEntries(Object.entries(businessModules).map(([key, config]) => [
     key,
@@ -796,7 +888,8 @@ const crmModuleFieldMap = {
 
 const crmModuleOptions = [
   { label: '客户主数据', value: 'customer' },
-  { label: '客户SAP信息（明细）', value: 'customerSapInfo' },
+  { label: '客户SAP信息（本次变更明细，仅当前行）', value: 'customerSapInfo' },
+  { label: '客户SAP信息（全部明细，全量）', value: 'customerSapInfoAll' },
   { label: '客户SAP组织（明细）', value: 'customerSapOrg' },
   ...Object.entries(businessModules).map(([value, config]) => ({ label: config.title, value }))
 ]
@@ -809,6 +902,24 @@ const successRuleTypes = [
   { label: 'JSON字段等于指定值', value: 'JSON_FIELD' },
   { label: 'XML字段等于指定值', value: 'XML_FIELD' },
   { label: 'SAP RETURN消息/表', value: 'SAP_RETURN' }
+]
+const triggerModes = [
+  { label: '手动触发', value: 'MANUAL' },
+  { label: '新增后触发', value: 'ON_CREATE' },
+  { label: '更新后触发', value: 'ON_UPDATE' },
+  { label: '保存后触发', value: 'ON_SAVE' },
+  { label: '删除后触发', value: 'ON_DELETE' },
+  { label: '自定义条件触发', value: 'CUSTOM' }
+]
+const triggerResources = [
+  { label: '任意对象', value: 'ANY' },
+  { label: '客户主数据', value: 'CUSTOMER' },
+  { label: '客户SAP信息', value: 'CUSTOMER_SAP_INFO' },
+  { label: '客户SAP组织', value: 'CUSTOMER_SAP_ORG' },
+  { label: '产品档案', value: 'PRODUCT' },
+  { label: 'AI日报', value: 'DAILY_REPORT' },
+  { label: '企微消息', value: 'WECOM_MESSAGE' },
+  { label: '业务台账', value: 'BUSINESS_RECORD' }
 ]
 const defaultTableField = () => ({
   sourceModule: '',
@@ -832,6 +943,7 @@ const genericProtocolOptions = [
   { label: 'REST', value: 'REST' },
   { label: 'SOAP', value: 'SOAP' },
   { label: 'Webhook', value: 'WEBHOOK' },
+  { label: '企业微信', value: 'WECOM' },
   { label: 'SFTP', value: 'SFTP' },
   { label: 'FTP', value: 'FTP' },
   { label: 'Database', value: 'DATABASE' },
@@ -860,6 +972,14 @@ const connectionPlaceholder = computed(() => {
   if (isSapRfcInterface.value) return '选择SAP RFC连接配置'
   return interfaceMode.value === 'SAP' ? '选择SAP连接配置' : '选择通用连接配置'
 })
+const connectionAuthPlaceholder = computed(() => {
+  if (connectionForm.value.connectionType === 'WECOM') {
+    return '{"key":"Webhook key，可选","defaultMsgType":"text","defaultContent":"默认消息","mentionedList":["@all"],"mentionedMobileList":[]}'
+  }
+  return 'JSON，如 {"token":"***"}'
+})
+const triggerModeLabel = (value) => triggerModes.find(item => item.value === value)?.label || value || '手动触发'
+const triggerResourceLabel = (value) => triggerResources.find(item => item.value === value)?.label || value || ''
 const sapObjectLabel = computed(() => {
   if (interfaceForm.value.protocol === 'SAP_IDOC') return 'IDoc/消息类型'
   if (interfaceForm.value.protocol === 'SAP_ODATA') return 'OData对象'
@@ -877,7 +997,7 @@ const connectionSelectOptions = computed(() => {
       value: item.configCode
     }))
   }
-  const matched = connections.value.filter(item => !interfaceForm.value.protocol || item.connectionType === interfaceForm.value.protocol)
+  const matched = connections.value.filter(item => !interfaceForm.value.protocol || item.connectionType === interfaceForm.value.protocol || (interfaceForm.value.protocol === 'WECOM' && item.connectionType === 'WEBHOOK'))
   const source = matched.length ? matched : connections.value
   return source.map(item => ({
     label: `${item.connectionCode} - ${item.connectionName} (${item.connectionType})`,
@@ -1031,16 +1151,30 @@ function applyProtocolDefaults(resetProtocolFields) {
     return
   }
   if (!interfaceForm.value.systemCode || interfaceForm.value.systemCode === 'SAP') {
-    interfaceForm.value.systemCode = 'EXTERNAL'
+    interfaceForm.value.systemCode = interfaceForm.value.protocol === 'WECOM' ? 'WECOM' : 'EXTERNAL'
   }
+  if (interfaceForm.value.protocol === 'WECOM') interfaceForm.value.systemCode = 'WECOM'
   interfaceForm.value.httpMethod = interfaceForm.value.httpMethod || 'POST'
   interfaceForm.value.contentType = interfaceForm.value.contentType || 'application/json'
+  if (interfaceForm.value.protocol === 'WECOM') {
+    interfaceForm.value.httpMethod = 'POST'
+    interfaceForm.value.contentType = 'application/json'
+    interfaceForm.value.endpointPath = ''
+    interfaceForm.value.successRuleType = 'JSON_FIELD'
+    interfaceForm.value.successFieldPath = 'body.errcode'
+    interfaceForm.value.successExpectedValues = '0'
+    interfaceForm.value.failureExpectedValues = ''
+    interfaceForm.value.successMessagePath = 'body.errmsg'
+  }
   if (resetProtocolFields) interfaceForm.value.sapFunctionName = ''
 }
 
 function buildInterfacePayload() {
   const payload = { ...interfaceForm.value }
   payload.successRuleType = payload.successRuleType || 'AUTO'
+  payload.triggerMode = payload.triggerMode || 'MANUAL'
+  payload.triggerResource = payload.triggerResource || ''
+  payload.triggerConditionJson = payload.triggerConditionJson || ''
   if (sapProtocols.includes(payload.protocol)) {
     payload.systemCode = payload.systemCode || 'SAP'
     if (payload.protocol === 'SAP_RFC') {
@@ -1049,10 +1183,18 @@ function buildInterfacePayload() {
       payload.contentType = ''
     }
   } else {
-    payload.systemCode = payload.systemCode || 'EXTERNAL'
+    payload.systemCode = payload.protocol === 'WECOM' ? 'WECOM' : (payload.systemCode || 'EXTERNAL')
     payload.sapFunctionName = ''
     payload.httpMethod = payload.httpMethod || 'POST'
     payload.contentType = payload.contentType || 'application/json'
+    if (payload.protocol === 'WECOM') {
+      payload.httpMethod = 'POST'
+      payload.contentType = 'application/json'
+      payload.successRuleType = payload.successRuleType || 'JSON_FIELD'
+      payload.successFieldPath = payload.successFieldPath || 'body.errcode'
+      payload.successExpectedValues = payload.successExpectedValues || '0'
+      payload.successMessagePath = payload.successMessagePath || 'body.errmsg'
+    }
   }
   return payload
 }
@@ -1065,6 +1207,14 @@ function validateInterfacePayload(payload) {
   if (!payload.connectionCode) {
     ElMessage.warning(interfaceMode.value === 'SAP' ? '请选择SAP连接配置' : '请选择通用连接配置')
     return false
+  }
+  if (payload.triggerConditionJson) {
+    try {
+      JSON.parse(payload.triggerConditionJson)
+    } catch {
+      ElMessage.warning('触发条件必须是合法JSON')
+      return false
+    }
   }
   if (sapProtocols.includes(payload.protocol)) {
     if (payload.protocol !== 'SAP_ODATA' && !payload.sapFunctionName) {
@@ -1145,6 +1295,22 @@ function handleMappingModuleChange() {
       sourceModule: row.sourceModule || mappingForm.value.sourceModule || 'customer'
     }))
   }
+}
+
+function setDetailScope(scope) {
+  const sourceModule = scope === 'all' ? 'customerSapInfoAll' : 'customerSapInfo'
+  mappingForm.value.sourceModule = sourceModule
+  mappingForm.value.sourceField = ''
+  mappingForm.value.sourceFieldLabel = ''
+  if (mappingForm.value.parameterMode !== 'TABLE') return
+  if (mappingForm.value.tableFields.length === 0) {
+    mappingForm.value.tableFields = [{ ...defaultTableField(), sourceModule }]
+    return
+  }
+  mappingForm.value.tableFields = mappingForm.value.tableFields.map(row => ({
+    ...row,
+    sourceModule: row.sourceModule || sourceModule
+  }))
 }
 
 function handleParameterModeChange(mode) {
@@ -1459,8 +1625,9 @@ onMounted(() => {
 .card-header { justify-content: space-between; }
 .toolbar { margin-bottom: 12px; }
 .pager { margin-top: 12px; justify-content: flex-end; }
-.interface-alert, .table-field-alert { margin-bottom: 14px; }
+.interface-alert, .table-field-alert, .detail-sync-scope-alert { margin-bottom: 14px; }
 .interface-dialog :deep(.el-radio-button__inner) { min-width: 92px; }
+.detail-scope-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .table-field-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:600; color:#303133; }
 .table-field-editor { margin-bottom:14px; }
 .log-summary { margin-bottom: 12px; }

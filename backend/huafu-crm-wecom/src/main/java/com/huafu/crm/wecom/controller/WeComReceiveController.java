@@ -12,13 +12,13 @@ public class WeComReceiveController {
         this.dispatcher = dispatcher;
     }
 
-    @GetMapping({"/api/wecom/callback", "/wecom/receive"})
+    @GetMapping({"/api/wecom/callback", "/wecom/receive", "/wecom/callback"})
     public String verify(@RequestParam(required = false) String echostr) {
         return echostr == null ? "ok" : echostr;
     }
 
     /** Returns immediately after crossing the dispatch boundary; MQ adapter can replace the Phase 0 synchronous dispatcher. */
-    @PostMapping({"/api/wecom/callback", "/wecom/receive"})
+    @PostMapping({"/api/wecom/callback", "/wecom/receive", "/wecom/callback"})
     public String receive(@RequestBody String xml) {
         dispatcher.dispatch(xml);
         return "success";

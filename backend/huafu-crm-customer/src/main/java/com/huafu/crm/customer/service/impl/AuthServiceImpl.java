@@ -53,7 +53,7 @@ public class AuthServiceImpl implements AuthService {
 
         return new LoginVO(
             token,
-            new LoginVO.UserInfoVO(user.getId(), user.getUsername(), user.getRealName(), user.getStatus())
+            new LoginVO.UserInfoVO(user.getId(), user.getUsername(), user.getRealName(), user.getDeptId(), user.getStatus())
         );
     }
 }

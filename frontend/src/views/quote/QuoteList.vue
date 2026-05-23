@@ -6,6 +6,7 @@
           <span>报价单管理</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
+            <ExcelImportButton module-name="报价单" :fields="importFields" :import-fn="createQuote" :export-rows="tableData" @done="loadData" />
             <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新建报价单</el-button>
           </div>
         </div>
@@ -170,6 +171,7 @@ import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -213,6 +215,13 @@ const batchFields = [
   { key: 'discountRate', label: '折扣率', type: 'number', precision: 4 },
   { key: 'paymentTerms', label: '付款条款' },
   { key: 'deliveryTerms', label: '交付条款' },
+  { key: 'remark', label: '备注' }
+]
+const importFields = [
+  { key: 'customerName', label: '客户名称', required: true, example: '浙江云泰纺织有限公司' },
+  { key: 'contactName', label: '联系人', example: '张三' },
+  { key: 'contactPhone', label: '联系电话', example: '13800000000' },
+  { key: 'validUntil', label: '有效期至', type: 'date', example: '2026-06-30' },
   { key: 'remark', label: '备注' }
 ]
 const isEditing = ref(false)

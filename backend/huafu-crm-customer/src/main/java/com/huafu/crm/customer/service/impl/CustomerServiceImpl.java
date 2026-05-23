@@ -78,6 +78,21 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public CustomerVO create(CustomerCreateDTO dto) {
+        String safeCustomerName = safeInput(dto.customerName());
+        String safeShortName = safeInput(dto.customerShortName());
+        if (safeCustomerName == null || safeCustomerName.isBlank()) {
+            throw new BizException(1001, "客户名称不能为空");
+        }
+        if (safeShortName == null || safeShortName.isBlank()) {
+            throw new BizException(1001, "客户简称不能为空");
+        }
+        Long sameNameCount = mapper.selectCount(new LambdaQueryWrapper<Customer>()
+            .eq(Customer::getCustomerName, safeCustomerName.trim())
+            .eq(Customer::getDeleted, 0));
+        if (sameNameCount > 0) {
+            throw new BizException(1002, "客户名称已存在，请勿重复创建：" + safeCustomerName.trim());
+        }
+
         String customerCode = dto.customerCode();
         if (customerCode == null || customerCode.isBlank()) {
             customerCode = "C-" + String.valueOf(System.currentTimeMillis()).substring(5)
@@ -95,8 +110,8 @@ public class CustomerServiceImpl implements CustomerService {
         Customer c = new Customer();
         // XSS过滤：对所有文本输入字段做HTML转义
         c.setCustomerCode(safeInput(customerCode));
-        c.setCustomerName(safeInput(dto.customerName()));
-        c.setCustomerShortName(safeInput(dto.customerShortName()));
+        c.setCustomerName(safeCustomerName.trim());
+        c.setCustomerShortName(safeShortName.trim());
         c.setType(dto.type());
         c.setLevel(dto.level());
         c.setStatus(dto.status() != null ? dto.status() : 1);

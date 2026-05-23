@@ -2,8 +2,8 @@ import request from '@/api/request'
 
 const BASE = '/crm/v1/integration'
 
-export const connectionTypes = ['REST', 'SOAP', 'WEBHOOK', 'SAP_RFC', 'SAP_ODATA', 'SAP_IDOC', 'SFTP', 'FTP', 'DATABASE', 'KAFKA', 'RABBITMQ', 'CUSTOM']
-export const authTypes = ['NONE', 'BASIC', 'BEARER', 'API_KEY', 'OAUTH2', 'SIGNATURE', 'CUSTOM']
+export const connectionTypes = ['REST', 'SOAP', 'WEBHOOK', 'WECOM', 'SAP_RFC', 'SAP_ODATA', 'SAP_IDOC', 'SFTP', 'FTP', 'DATABASE', 'KAFKA', 'RABBITMQ', 'CUSTOM']
+export const authTypes = ['NONE', 'BASIC', 'BEARER', 'API_KEY', 'OAUTH2', 'SIGNATURE', 'WECOM_WEBHOOK', 'CUSTOM']
 export const directions = ['OUTBOUND', 'INBOUND', 'BIDIRECTIONAL']
 export const logStatuses = ['PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'RETRYING']
 

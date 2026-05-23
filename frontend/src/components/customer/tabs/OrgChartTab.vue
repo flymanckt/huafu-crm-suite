@@ -1,35 +1,29 @@
 <template>
   <div class="org-chart-tab">
     <div class="tab-toolbar">
-      <el-button size="small" @click="expandAll">展开全部</el-button>
-      <el-button size="small" @click="collapseAll">折叠全部</el-button>
+      <div>
+        <div class="toolbar-title">组织架构图</div>
+        <div class="toolbar-subtitle">按联系人上下级关系生成，可在联系人页签维护上级关系</div>
+      </div>
+      <el-radio-group v-model="scaleMode" size="small">
+        <el-radio-button v-for="item in scaleOptions" :key="item.value" :value="item.value">
+          {{ item.label }}
+        </el-radio-button>
+      </el-radio-group>
     </div>
 
-    <el-card shadow="never">
-      <el-tree
-        ref="treeRef"
-        :data="treeData"
-        :props="treeProps"
-        node-key="id"
-        default-expand-all
-        :expand-on-click-node="false"
-        draggable
-        @node-click="handleNodeClick"
-        @node-drop="handleDrop"
-      >
-        <template #default="{ node, data }">
-          <span class="tree-node">
-            <span class="node-icon">
-              <el-icon v-if="data.isMain === 1" color="#f56c6c"><Star /></el-icon>
-              <el-icon v-else><User /></el-icon>
-            </span>
-            <span class="node-label">{{ node.label }}</span>
-            <el-tag v-if="data.isMain === 1" type="danger" size="small" style="margin-left:8px">主</el-tag>
-            <span class="node-position">{{ data.position }}</span>
-          </span>
-        </template>
-      </el-tree>
-    </el-card>
+    <div v-if="treeData.length" class="org-chart-shell">
+      <div class="org-chart-canvas" :class="`scale-${scaleMode}`">
+        <ul class="org-root-list">
+          <OrgChartNode
+            v-for="root in treeData"
+            :key="root.id"
+            :node="root"
+            @select="handleNodeClick"
+          />
+        </ul>
+      </div>
+    </div>
 
     <el-empty v-if="!treeData.length" description="暂无组织架构数据" :image-size="60" />
   </div>
@@ -37,20 +31,21 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { Star, User } from '@element-plus/icons-vue'
 import { getContactList } from '@/api/customer'
+import OrgChartNode from '@/components/customer/OrgChartNode.vue'
 
 const props = defineProps({
   customerId: { type: [String, Number], required: true },
   contacts: { type: Array, default: () => [] }
 })
 
-const treeRef = ref(null)
 const localContacts = ref([])
-const treeProps = {
-  label: 'label',
-  children: 'children'
-}
+const scaleMode = ref('standard')
+const scaleOptions = [
+  { label: '标准', value: 'standard' },
+  { label: '紧凑', value: 'compact' },
+  { label: '宽松', value: 'wide' }
+]
 
 // 如果外部传入了 contacts（组织架构图组件外部已经加载），直接用；否则自己加载
 const contactSource = computed(() => props.contacts.length > 0 ? props.contacts : localContacts.value)
@@ -84,6 +79,8 @@ const treeData = computed(() => {
       id: c.id,
       label: c.contactName,
       position: c.position || '',
+      department: c.department || c.deptName || '',
+      phone: c.mobile || c.phone || c.telephone || '',
       isMain: c.isMain,
       children: []
     }
@@ -101,45 +98,72 @@ const treeData = computed(() => {
   return roots
 })
 
-const expandAll = () => {
-  const nodes = treeRef.value?.store.nodesMap || {}
-  Object.values(nodes).forEach(n => n.expand())
-}
-
-const collapseAll = () => {
-  const nodes = treeRef.value?.store.nodesMap || {}
-  Object.values(nodes).forEach(n => n.collapse())
-}
-
 const handleNodeClick = (data) => {
   console.log('点击节点:', data)
-}
-
-const handleDrop = (draggingNode, dropNode, dropType) => {
-  console.log('拖拽:', draggingNode.data, dropNode.data, dropType)
-  // 实际应调用API更新parentContactId
 }
 </script>
 
 <style scoped>
-.org-chart-tab { padding: 8px 0; }
-.tab-toolbar { margin-bottom: 12px; }
-
-.tree-node {
+.org-chart-tab {
+  padding: 0;
+}
+.tab-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 4px 2px 12px;
+  border-bottom: 1px solid #edf1f7;
 }
-.node-icon {
-  display: flex;
-  align-items: center;
+.toolbar-title {
+  color: #1f2d3d;
+  font-size: 16px;
+  font-weight: 700;
 }
-.node-label {
-  font-weight: 500;
-}
-.node-position {
-  color: #999;
+.toolbar-subtitle {
+  margin-top: 3px;
+  color: #7a8798;
   font-size: 12px;
-  margin-left: 8px;
+}
+.org-chart-shell {
+  min-height: 520px;
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid #e1e8f2;
+  border-radius: 6px;
+  background:
+    linear-gradient(#f4f7fb 1px, transparent 1px),
+    linear-gradient(90deg, #f4f7fb 1px, transparent 1px),
+    #ffffff;
+  background-size: 28px 28px;
+}
+.org-chart-canvas {
+  min-width: max-content;
+  padding: 18px 28px 34px;
+  transform-origin: top center;
+}
+.org-chart-canvas.scale-compact {
+  transform: scale(0.88);
+}
+.org-chart-canvas.scale-wide {
+  transform: scale(1.08);
+}
+.org-root-list {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (max-width: 768px) {
+  .tab-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .org-chart-shell {
+    padding: 14px;
+  }
 }
 </style>

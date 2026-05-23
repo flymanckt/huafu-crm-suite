@@ -7,15 +7,18 @@ import org.xml.sax.InputSource;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
+import java.util.regex.Pattern;
 
 @Component
 public class WeComXmlParser {
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@[^\\s　:：,，]+[\\s　:：,，]*");
+
     public ParsedMessage parse(String xml) {
         if (!StringUtils.hasText(xml)) {
             return new ParsedMessage("", "", "", "", "");
         }
         if (!xml.trim().startsWith("<")) {
-            return new ParsedMessage("", "", "text", "", xml);
+            return new ParsedMessage("", "", "text", "", stripMentions(extractJsonText(xml)));
         }
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -30,10 +33,48 @@ public class WeComXmlParser {
             String msgType = textOf(document, "MsgType");
             String msgId = textOf(document, "MsgId");
             String content = textOf(document, "Content");
-            return new ParsedMessage(fromUser, toUser, msgType, msgId, content);
+            if (!StringUtils.hasText(content)) {
+                content = textOf(document, "Recognition");
+            }
+            if (!StringUtils.hasText(content)) {
+                content = textOf(document, "EventKey");
+            }
+            return new ParsedMessage(fromUser, toUser, msgType, msgId, stripMentions(content));
         } catch (Exception ex) {
-            return new ParsedMessage("", "", "text", "", xml);
+            return new ParsedMessage("", "", "text", "", stripMentions(xml));
         }
+    }
+
+    private String extractJsonText(String raw) {
+        String value = raw.trim();
+        if (!value.startsWith("{")) {
+            return raw;
+        }
+        String content = extractJsonString(value, "content");
+        if (StringUtils.hasText(content)) {
+            return content;
+        }
+        String text = extractJsonString(value, "text");
+        return StringUtils.hasText(text) ? text : raw;
+    }
+
+    private String extractJsonString(String json, String key) {
+        var matcher = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"").matcher(json);
+        if (!matcher.find()) {
+            return "";
+        }
+        return matcher.group(1)
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\\"", "\"")
+            .replace("\\\\", "\\");
+    }
+
+    public String stripMentions(String content) {
+        if (!StringUtils.hasText(content)) {
+            return "";
+        }
+        return MENTION_PATTERN.matcher(content).replaceAll("").trim();
     }
 
     private String textOf(Document document, String tagName) {

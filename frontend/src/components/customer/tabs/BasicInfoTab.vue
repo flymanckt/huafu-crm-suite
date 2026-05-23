@@ -12,10 +12,11 @@
     <!-- 分组1: 基本信息 -->
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>基本信息</span></template>
-      <el-descriptions :column="2" border v-if="!isEditing">
+      <el-descriptions :column="detailColumns" border v-if="!isEditing">
         <el-descriptions-item label="客户名称">{{ formData.customerName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户名称简称">{{ formData.customerShortName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户编码">{{ formData.customerCode || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="SAP客户编号">{{ formData.sapCustomerCode || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户类型">{{ customerLabel.type(formData.type) }}</el-descriptions-item>
         <el-descriptions-item label="客户状态"><el-tag :type="customerStatusType[formData.status]">{{ customerLabel.status(formData.status) }}</el-tag></el-descriptions-item>
         <el-descriptions-item label="客户等级">{{ customerLabel.level(formData.level) }}</el-descriptions-item>
@@ -26,16 +27,17 @@
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="客户名称" prop="customerName"><el-input v-model="formData.customerName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户名称简称"><el-input v-model="formData.customerShortName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户编码"><el-input v-model="formData.customerCode" disabled /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户类型" prop="type"><DictSelect v-model="formData.type" dict-code="customer_type" value-type="number" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户状态" prop="status"><DictSelect v-model="formData.status" dict-code="customer_status" value-type="number" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户等级"><DictSelect v-model="formData.level" dict-code="customer_level" value-type="number" clearable /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户阶段"><DictSelect v-model="formData.customerStage" dict-code="customer_stage" value-type="number" clearable /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="英文名称"><el-input v-model="formData.englishName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="统一社会信用代码"><el-input v-model="formData.unifiedSocialCreditCode" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="风险等级"><DictSelect v-model="formData.riskLevel" dict-code="risk_level" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户名称" prop="customerName"><el-input v-model="formData.customerName" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户名称简称"><el-input v-model="formData.customerShortName" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户编码"><el-input v-model="formData.customerCode" disabled /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="SAP客户编号"><el-input v-model="formData.sapCustomerCode" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户类型" prop="type"><DictSelect v-model="formData.type" dict-code="customer_type" value-type="number" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户状态" prop="status"><DictSelect v-model="formData.status" dict-code="customer_status" value-type="number" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户等级"><DictSelect v-model="formData.level" dict-code="customer_level" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户阶段"><DictSelect v-model="formData.customerStage" dict-code="customer_stage" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="英文名称"><el-input v-model="formData.englishName" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="统一社会信用代码"><el-input v-model="formData.unifiedSocialCreditCode" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="风险等级"><DictSelect v-model="formData.riskLevel" dict-code="risk_level" value-type="number" clearable /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -43,7 +45,7 @@
     <!-- 分组2: 业务信息 -->
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>业务信息</span></template>
-      <el-descriptions :column="2" border v-if="!isEditing">
+      <el-descriptions :column="detailColumns" border v-if="!isEditing">
         <el-descriptions-item label="业务类型">{{ customerLabel.businessType(formData.businessType) }}</el-descriptions-item>
         <el-descriptions-item label="客户分类">{{ customerLabel.category(formData.category) }}</el-descriptions-item>
         <el-descriptions-item label="客户来源">{{ customerLabel.source(formData.source) }}</el-descriptions-item>
@@ -58,17 +60,17 @@
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="业务类型" prop="businessType"><DictSelect v-model="formData.businessType" dict-code="biz_type" value-type="number" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户分类"><DictSelect v-model="formData.category" dict-code="customer_category" value-type="number" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="客户来源"><DictSelect v-model="formData.source" dict-code="customer_source" value-type="number" clearable /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="行业地位"><el-input v-model="formData.industryPosition" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="主要客户群体"><DictSelect v-model="formData.customerGroup" dict-code="customer_group" value-type="number" clearable /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="机台数"><el-input-number v-model="formData.machineCount" :min="0" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="产能情况"><el-input v-model="formData.capacityInfo" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="年营业额"><el-input-number v-model="formData.annualRevenue" :min="0" :precision="2" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="国家区域"><el-input v-model="formData.countryRegion" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="主营品牌"><el-input v-model="formData.mainBrand" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="年用纱量"><el-input v-model="formData.annualYarnVolume" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="业务类型" prop="businessType"><DictSelect v-model="formData.businessType" dict-code="biz_type" value-type="number" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户分类"><DictSelect v-model="formData.category" dict-code="customer_category" value-type="number" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户来源"><DictSelect v-model="formData.source" dict-code="customer_source" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="行业地位"><el-input v-model="formData.industryPosition" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="主要客户群体"><DictSelect v-model="formData.customerGroup" dict-code="customer_group" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="机台数"><el-input-number v-model="formData.machineCount" :min="0" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="产能情况"><el-input v-model="formData.capacityInfo" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="年营业额"><el-input-number v-model="formData.annualRevenue" :min="0" :precision="2" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="国家区域"><el-input v-model="formData.countryRegion" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="主营品牌"><el-input v-model="formData.mainBrand" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="年用纱量"><el-input v-model="formData.annualYarnVolume" /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -76,14 +78,14 @@
     <!-- 分组3: 组织归属 -->
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>组织归属</span></template>
-      <el-descriptions :column="2" border v-if="!isEditing">
+      <el-descriptions :column="detailColumns" border v-if="!isEditing">
         <el-descriptions-item label="归属部门">{{ resolveDeptName(formData.ownerDeptId) }}</el-descriptions-item>
         <el-descriptions-item label="负责人">{{ resolveUserName(formData.ownerUserId) }}</el-descriptions-item>
         <el-descriptions-item label="销售跟单">{{ formData.salesName || '-' }}</el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :span="formColSpan">
             <el-form-item label="归属部门">
               <el-tree-select
                 v-model="formData.ownerDeptId"
@@ -95,14 +97,14 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="formColSpan">
             <el-form-item label="负责人">
               <el-select v-model="formData.ownerUserId" clearable filterable style="width:100%">
                 <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="销售跟单"><el-input v-model="formData.salesName" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="销售跟单"><el-input v-model="formData.salesName" /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -110,7 +112,7 @@
     <!-- 分组4: 地址与联络 -->
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>地址与联络</span></template>
-      <el-descriptions :column="2" border v-if="!isEditing">
+      <el-descriptions :column="detailColumns" border v-if="!isEditing">
         <el-descriptions-item label="省/市/区">{{ [formData.province, formData.city, formData.district].filter(Boolean).join('/') || '-' }}</el-descriptions-item>
         <el-descriptions-item label="详细地址">{{ formData.address || '-' }}</el-descriptions-item>
         <el-descriptions-item label="经度">{{ formData.locationLng || '-' }}</el-descriptions-item>
@@ -121,9 +123,9 @@
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="省份"><el-input v-model="formData.province" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="城市"><el-input v-model="formData.city" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="区县"><el-input v-model="formData.district" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="省份"><el-input v-model="formData.province" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="城市"><el-input v-model="formData.city" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="区县"><el-input v-model="formData.district" /></el-form-item></el-col>
           <el-col :span="24">
             <el-form-item label="详细地址">
               <div class="address-input-row">
@@ -133,11 +135,11 @@
               </div>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="经度"><el-input v-model="formData.locationLng" disabled /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="纬度"><el-input v-model="formData.locationLat" disabled /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="主联系人"><el-input v-model="formData.mainContactName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="主联系人电话"><el-input v-model="formData.mainContactPhone" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="主联系人职务"><el-input v-model="formData.mainContactRole" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="经度"><el-input v-model="formData.locationLng" disabled /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="纬度"><el-input v-model="formData.locationLat" disabled /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="主联系人"><el-input v-model="formData.mainContactName" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="主联系人电话"><el-input v-model="formData.mainContactPhone" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="主联系人职务"><el-input v-model="formData.mainContactRole" /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -145,13 +147,13 @@
     <!-- 分组5: 捆绑关系 -->
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>捆绑关系</span></template>
-      <el-descriptions :column="2" border v-if="!isEditing">
+      <el-descriptions :column="detailColumns" border v-if="!isEditing">
         <el-descriptions-item label="捆绑客户/品牌">{{ formData.bundleCustomerName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="捆绑客户SAP代码">{{ formData.bundleCustomerSapCode || '-' }}</el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :span="formColSpan">
             <el-form-item label="捆绑客户/品牌">
               <el-select
                 v-model="formData.bundleCustomerId"
@@ -175,7 +177,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="捆绑客户SAP代码"><el-input v-model="formData.bundleCustomerSapCode" disabled /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="捆绑客户SAP代码"><el-input v-model="formData.bundleCustomerSapCode" disabled /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -183,7 +185,7 @@
     <!-- 分组6: 财务信息 -->
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>财务信息</span></template>
-      <el-descriptions :column="2" border v-if="!isEditing">
+      <el-descriptions :column="detailColumns" border v-if="!isEditing">
         <el-descriptions-item label="资产类型">{{ formData.assetType || '-' }}</el-descriptions-item>
         <el-descriptions-item label="税号">{{ formData.taxId || '-' }}</el-descriptions-item>
         <el-descriptions-item label="开户行">{{ formData.bankName || '-' }}</el-descriptions-item>
@@ -192,24 +194,11 @@
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="资产类型"><el-input v-model="formData.assetType" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="税号"><el-input v-model="formData.taxId" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="开户行"><el-input v-model="formData.bankName" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="银行账号"><el-input v-model="formData.bankAccount" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="发票抬头"><el-input v-model="formData.invoiceTitle" /></el-form-item></el-col>
-        </el-row>
-      </el-form>
-    </el-card>
-
-    <!-- 分组7: SAP信息 -->
-    <el-card shadow="never">
-      <template #header><span>SAP信息</span></template>
-      <el-descriptions :column="2" border v-if="!isEditing">
-        <el-descriptions-item label="SAP客户编码">{{ formData.sapCustomerCode || '-' }}</el-descriptions-item>
-      </el-descriptions>
-      <el-form v-else :model="formData" label-width="100px" class="edit-form">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="SAP客户编码"><el-input v-model="formData.sapCustomerCode" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="资产类型"><el-input v-model="formData.assetType" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="税号"><el-input v-model="formData.taxId" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="开户行"><el-input v-model="formData.bankName" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="银行账号"><el-input v-model="formData.bankAccount" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="发票抬头"><el-input v-model="formData.invoiceTitle" /></el-form-item></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -223,7 +212,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import { updateCustomer, getCustomerDetail, getCustomerPage } from '@/api/customer'
 import { getDeptTree, getUserPage } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -242,6 +231,9 @@ const props = defineProps({
   detail: { type: Object, default: () => ({}) }
 })
 const emit = defineEmits(['updated'])
+const injectedDetailColumns = inject('customerDetailColumns', ref(3))
+const detailColumns = computed(() => Number(injectedDetailColumns.value || 3))
+const formColSpan = computed(() => 24 / detailColumns.value)
 
 const isEditing = ref(false)
 const saving = ref(false)

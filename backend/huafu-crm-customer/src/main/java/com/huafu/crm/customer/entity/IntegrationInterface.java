@@ -20,6 +20,9 @@ public class IntegrationInterface {
     private String httpMethod;
     private String endpointPath;
     private String contentType;
+    private String triggerMode;
+    private String triggerResource;
+    private String triggerConditionJson;
     private Short enabled;
     private Integer retryLimit;
     private String successRuleType;
@@ -58,6 +61,12 @@ public class IntegrationInterface {
     public void setEndpointPath(String endpointPath) { this.endpointPath = endpointPath; }
     public String getContentType() { return contentType; }
     public void setContentType(String contentType) { this.contentType = contentType; }
+    public String getTriggerMode() { return triggerMode; }
+    public void setTriggerMode(String triggerMode) { this.triggerMode = triggerMode; }
+    public String getTriggerResource() { return triggerResource; }
+    public void setTriggerResource(String triggerResource) { this.triggerResource = triggerResource; }
+    public String getTriggerConditionJson() { return triggerConditionJson; }
+    public void setTriggerConditionJson(String triggerConditionJson) { this.triggerConditionJson = triggerConditionJson; }
     public Short getEnabled() { return enabled; }
     public void setEnabled(Short enabled) { this.enabled = enabled; }
     public Integer getRetryLimit() { return retryLimit; }

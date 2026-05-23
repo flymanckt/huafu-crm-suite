@@ -6,6 +6,7 @@
           <span>商机列表</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
+            <ExcelImportButton module-name="商机" :fields="importFields" :import-fn="importOpportunityRow" :export-rows="tableData" @done="loadData" />
             <el-button type="primary" size="small" @click="openCreate">新建商机</el-button>
           </div>
         </div>
@@ -81,6 +82,7 @@ import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
@@ -127,9 +129,23 @@ const batchFields = [
   { key: 'expectedCloseDate', label: '预计成交日', type: 'date' },
   { key: 'remark', label: '备注' }
 ]
+const importFields = [
+  { key: 'opportunityName', label: '商机名称', required: true, example: '云泰棉纱年度合作' },
+  { key: 'customerId', label: '客户ID', type: 'number' },
+  { key: 'handlerUserId', label: '负责人ID', type: 'number' },
+  { key: 'stage', label: '阶段', type: 'number', valueMap: { 初步接触: 1, 需求确认: 2, 方案报价: 3, 合同谈判: 4, 成交: 5 }, example: '初步接触' },
+  { key: 'productName', label: '产品名称', example: '棉纱' },
+  { key: 'quantity', label: '数量', type: 'number' },
+  { key: 'unit', label: '单位', example: '吨' },
+  { key: 'estimatedAmount', label: '预估金额', type: 'number' },
+  { key: 'expectedCloseDate', label: '预计成交日', type: 'date', example: '2026-06-30' },
+  { key: 'winProbability', label: '赢单率', type: 'number', example: '30' },
+  { key: 'remark', label: '备注' }
+]
 const userInfo = () => JSON.parse(localStorage.getItem('userInfo') || '{}')
 const defaultForm = () => ({ opportunityName: '', customerId: null, handlerUserId: userInfo().id || 1, stage: 1, productName: '', quantity: null, unit: '', estimatedAmount: null, expectedCloseDate: null, winProbability: 0, remark: '', sourceLeadId: null })
 const form = ref(defaultForm())
+const importOpportunityRow = (row) => createOpportunity({ ...defaultForm(), ...row })
 
 const loadData = async () => {
   loading.value = true

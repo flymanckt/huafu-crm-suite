@@ -6,6 +6,7 @@
           <span>日报列表</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
+            <ExcelImportButton module-name="日报" :fields="importFields" :import-fn="importDailyReportRow" :export-rows="tableData" @done="loadData" />
             <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新增日报</el-button>
           </div>
         </div>
@@ -91,6 +92,7 @@ import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { Plus, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -128,6 +130,12 @@ const today = new Date().toISOString().slice(0, 10)
 const userInfo = () => JSON.parse(localStorage.getItem('userInfo') || '{}')
 const defaultForm = () => ({ userId: userInfo().id || 1, reportDate: today, contentText: '' })
 const form = ref(defaultForm())
+const importFields = [
+  { key: 'reportDate', label: '日报日期', type: 'date', required: true, example: today },
+  { key: 'userId', label: '提交人ID', type: 'number' },
+  { key: 'contentText', label: '日报内容', required: true, example: '今日拜访浙江云泰，沟通棉纱需求。' }
+]
+const importDailyReportRow = (row) => createDailyReport({ ...defaultForm(), ...row })
 
 const parseStatusLabel = { 0:'未解析', 1:'解析中', 2:'成功', 3:'失败' }
 const parseStatusType = { 0:'info', 1:'warning', 2:'success', 3:'danger' }

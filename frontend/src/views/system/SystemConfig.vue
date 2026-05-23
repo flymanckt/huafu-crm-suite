@@ -64,6 +64,88 @@
         </el-form>
       </div>
 
+      <div v-if="activeGroup === 'WECOM'" class="quick-config-panel">
+        <el-form :model="wecomForm" label-width="110px">
+          <el-divider content-position="left">群机器人发送</el-divider>
+          <el-row :gutter="16">
+            <el-col :xs="24" :md="16">
+              <el-form-item label="Webhook地址">
+                <el-input v-model="wecomForm.webhookUrl" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="机器人Key">
+                <el-input v-model="wecomForm.robotKey" type="password" show-password placeholder="Webhook URL 中的 key，可选" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="@成员ID">
+                <el-input v-model="wecomForm.mentionedList" placeholder="多个用逗号分隔，@all 表示所有人" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="@手机号">
+                <el-input v-model="wecomForm.mentionedMobileList" placeholder="多个用逗号分隔" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="默认消息类型">
+                <el-select v-model="wecomForm.defaultMsgType" style="width:100%">
+                  <el-option label="文本消息" value="text" />
+                  <el-option label="Markdown消息" value="markdown" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="16">
+              <el-form-item label="默认内容">
+                <el-input v-model="wecomForm.defaultContent" placeholder="接口未映射消息内容时使用" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="8">
+              <el-form-item label=" ">
+                <el-button type="primary" :loading="savingWecomConfig" @click="saveWecomQuickConfig">保存企微配置</el-button>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-divider content-position="left">消息接收写入CRM</el-divider>
+          <el-row :gutter="16">
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="启用接收">
+                <el-switch v-model="wecomForm.receiveEnabled" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="写入策略">
+                <el-select v-model="wecomForm.receiveWriteMode" style="width:100%">
+                  <el-option label="命中关键词写入日报" value="KEYWORD_DAILY_REPORT" />
+                  <el-option label="所有文本写入日报" value="ALL_DAILY_REPORT" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="8">
+              <el-form-item label="回调地址">
+                <el-input v-model="wecomForm.receiveCallbackUrl" placeholder="/api/wecom/callback" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="16">
+              <el-form-item label="关键词">
+                <el-input v-model="wecomForm.receiveKeywords" placeholder="日报,商机,商情,丢单,拜访,客户" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="接收Token">
+                <el-input v-model="wecomForm.receiveToken" type="password" show-password placeholder="企微回调URL验证Token" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="16">
+              <el-form-item label="AES Key">
+                <el-input v-model="wecomForm.receiveEncodingAesKey" type="password" show-password placeholder="EncodingAESKey，当前优先支持明文/已解密消息" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-form>
+      </div>
+
       <BatchUpdateBar resource="system-config" :fields="batchFields" :selected-rows="selectedRows" @clear="clearBatchSelection" @done="loadByGroup" />
       <el-table ref="tableRef" :data="filteredTableData" v-loading="loading" border stripe class="data-table" max-height="calc(100vh - 390px)" style="margin-top:12px" row-key="id" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="46" fixed />
@@ -147,6 +229,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { getConfigsByGroup, getConfigGroups, createConfig, updateConfig, deleteConfig } from '@/api/system/config'
+import { createConnection, listConnections, updateConnection } from '@/api/integration'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
@@ -156,7 +239,7 @@ import { Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const activeGroup = ref('AMAP')
-const groups = ref(['AMAP', 'AI', 'API', 'SYSTEM'])
+const groups = ref(['AMAP', 'AI', 'WECOM', 'API', 'SAP', 'INTEGRATION', 'SYSTEM'])
 const tableData = ref([])
 const loading = ref(false)
 const tableRef = ref()
@@ -192,6 +275,7 @@ const isEdit = ref(false)
 const submitting = ref(false)
 const formRef = ref()
 const savingAiConfig = ref(false)
+const savingWecomConfig = ref(false)
 const batchFields = [
   { key: 'configValue', label: '配置值' },
   { key: 'configGroup', label: '配置分组' },
@@ -221,6 +305,21 @@ const aiForm = ref({
   apiKey: ''
 })
 
+const wecomForm = ref({
+  webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send',
+  robotKey: '',
+  mentionedList: '',
+  mentionedMobileList: '',
+  defaultMsgType: 'text',
+  defaultContent: '',
+  receiveEnabled: true,
+  receiveCallbackUrl: '/api/wecom/callback',
+  receiveToken: '',
+  receiveEncodingAesKey: '',
+  receiveWriteMode: 'KEYWORD_DAILY_REPORT',
+  receiveKeywords: '日报,商机,商情,丢单,拜访,客户'
+})
+
 const defaultForm = () => ({
   configKey: '',
   configValue: '',
@@ -241,7 +340,7 @@ const rules = {
   type: [{ required: true, message: '请选择类型', trigger: 'change' }]
 }
 
-const groupLabel = (g) => ({ AMAP: '高德地图', AI: 'AI服务', API: '接口配置', SAP: 'SAP配置', INTEGRATION: '集成平台', SYSTEM: '系统配置' }[g] || g)
+const groupLabel = (g) => ({ AMAP: '高德地图', AI: 'AI服务', WECOM: '企业微信', API: '接口配置', SAP: 'SAP配置', INTEGRATION: '集成平台', SYSTEM: '系统配置' }[g] || g)
 
 const currentAiProvider = computed(() => aiProviders.find(item => item.value === aiForm.value.provider) || aiProviders[0])
 
@@ -253,10 +352,10 @@ const isSecretConfig = (row) => {
 async function loadGroups() {
   try {
     const data = await getConfigGroups()
-    const merged = new Set(['AMAP', 'AI', 'API', 'SYSTEM', ...(data || [])])
+    const merged = new Set(['AMAP', 'AI', 'WECOM', 'API', 'SAP', 'INTEGRATION', 'SYSTEM', ...(data || [])])
     groups.value = Array.from(merged)
   } catch (e) {
-    groups.value = ['AMAP', 'AI', 'API', 'SYSTEM']
+    groups.value = ['AMAP', 'AI', 'WECOM', 'API', 'SAP', 'INTEGRATION', 'SYSTEM']
   }
 }
 
@@ -277,6 +376,7 @@ async function loadByGroup() {
       _displayValue: parseValue(row, row.configValue)
     }))
     if (activeGroup.value === 'AI') syncAiForm()
+    if (activeGroup.value === 'WECOM') syncWecomForm()
   } catch (e) {
     ElMessage.error('加载配置失败')
   } finally {
@@ -335,11 +435,11 @@ async function saveAiQuickConfig() {
   savingAiConfig.value = true
   try {
     await Promise.all([
-      upsertConfig('ai.provider', aiForm.value.provider, 'AI供应商', 'AI服务供应商预设', false),
-      upsertConfig('ai.protocol', aiForm.value.protocol, 'AI调用协议', 'AI服务调用协议', false),
-      upsertConfig('ai.base_url', aiForm.value.baseUrl, 'AI服务接口地址', 'AI服务接口 Base URL', false),
-      upsertConfig('ai.model', aiForm.value.model, 'AI默认模型', 'AI服务默认模型名称', false),
-      upsertConfig('ai.api_key', aiForm.value.apiKey, 'AI服务 API Key', 'AI服务调用密钥', true)
+      upsertConfig('ai.provider', aiForm.value.provider, 'AI供应商', 'AI服务供应商预设', false, 'AI'),
+      upsertConfig('ai.protocol', aiForm.value.protocol, 'AI调用协议', 'AI服务调用协议', false, 'AI'),
+      upsertConfig('ai.base_url', aiForm.value.baseUrl, 'AI服务接口地址', 'AI服务接口 Base URL', false, 'AI'),
+      upsertConfig('ai.model', aiForm.value.model, 'AI默认模型', 'AI服务默认模型名称', false, 'AI'),
+      upsertConfig('ai.api_key', aiForm.value.apiKey, 'AI服务 API Key', 'AI服务调用密钥', true, 'AI')
     ])
     ElMessage.success('AI配置已保存')
     await loadByGroup()
@@ -348,15 +448,93 @@ async function saveAiQuickConfig() {
   }
 }
 
-async function upsertConfig(key, value, name, description) {
+function syncWecomForm() {
+  wecomForm.value = {
+    webhookUrl: configValue('wecom.robot_webhook_url') || configValue('wecom.webhook_url') || 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send',
+    robotKey: configValue('wecom.robot_key'),
+    mentionedList: configValue('wecom.mentioned_list'),
+    mentionedMobileList: configValue('wecom.mentioned_mobile_list'),
+    defaultMsgType: configValue('wecom.default_msg_type') || 'text',
+    defaultContent: configValue('wecom.default_content'),
+    receiveEnabled: configValue('wecom.receive_enabled') !== 'false',
+    receiveCallbackUrl: configValue('wecom.receive_callback_url') || '/api/wecom/callback',
+    receiveToken: configValue('wecom.receive_token'),
+    receiveEncodingAesKey: configValue('wecom.receive_encoding_aes_key'),
+    receiveWriteMode: configValue('wecom.receive_write_mode') || 'KEYWORD_DAILY_REPORT',
+    receiveKeywords: configValue('wecom.receive_keywords') || '日报,商机,商情,丢单,拜访,客户'
+  }
+}
+
+async function saveWecomQuickConfig() {
+  if (!wecomForm.value.webhookUrl) {
+    ElMessage.warning('请填写企微群机器人 Webhook 地址')
+    return
+  }
+  savingWecomConfig.value = true
+  try {
+    await Promise.all([
+      upsertConfig('wecom.robot_webhook_url', wecomForm.value.webhookUrl, '企微群机器人Webhook', '企业微信群机器人 Webhook 完整地址', true, 'WECOM'),
+      upsertConfig('wecom.robot_key', wecomForm.value.robotKey, '企微机器人Key', 'Webhook URL 中的 key 参数；如果 Webhook 地址已包含 key 可留空', true, 'WECOM'),
+      upsertConfig('wecom.mentioned_list', wecomForm.value.mentionedList, '企微默认@成员ID', '文本消息默认 @ 的成员ID，多个用逗号分隔，@all 表示所有人', false, 'WECOM'),
+      upsertConfig('wecom.mentioned_mobile_list', wecomForm.value.mentionedMobileList, '企微默认@手机号', '文本消息默认 @ 的手机号，多个用逗号分隔', false, 'WECOM'),
+      upsertConfig('wecom.default_msg_type', wecomForm.value.defaultMsgType, '企微默认消息类型', '群机器人默认消息类型：text/markdown', false, 'WECOM'),
+      upsertConfig('wecom.default_content', wecomForm.value.defaultContent, '企微默认消息内容', '接口未映射消息内容时使用的兜底文本', false, 'WECOM'),
+      upsertConfig('wecom.receive_enabled', String(Boolean(wecomForm.value.receiveEnabled)), '启用企微消息接收', '启用后，企微群内 @机器人 的消息可通过回调写入CRM', false, 'WECOM', 'BOOLEAN'),
+      upsertConfig('wecom.receive_callback_url', wecomForm.value.receiveCallbackUrl, '企微接收回调地址', '配置到企业微信接收消息的回调URL', false, 'WECOM'),
+      upsertConfig('wecom.receive_token', wecomForm.value.receiveToken, '企微接收Token', '企业微信回调URL验证Token', true, 'WECOM'),
+      upsertConfig('wecom.receive_encoding_aes_key', wecomForm.value.receiveEncodingAesKey, '企微接收EncodingAESKey', '企业微信回调消息加解密EncodingAESKey；当前系统优先支持明文/已解密消息入库', true, 'WECOM'),
+      upsertConfig('wecom.receive_write_mode', wecomForm.value.receiveWriteMode, '企微写入策略', 'KEYWORD_DAILY_REPORT=命中关键词写日报并AI解析；ALL_DAILY_REPORT=所有文本写日报并AI解析', false, 'WECOM'),
+      upsertConfig('wecom.receive_keywords', wecomForm.value.receiveKeywords, '企微写入关键词', '命中这些关键词的@机器人内容会写入CRM日报并触发AI解析，多个用逗号分隔', false, 'WECOM')
+    ])
+    await upsertWecomConnection()
+    ElMessage.success('企微配置已保存，并已同步到集成平台连接')
+    await loadByGroup()
+  } finally {
+    savingWecomConfig.value = false
+  }
+}
+
+async function upsertWecomConnection() {
+  const authConfig = JSON.stringify({
+    key: wecomForm.value.robotKey || '',
+    mentionedList: splitComma(wecomForm.value.mentionedList),
+    mentionedMobileList: splitComma(wecomForm.value.mentionedMobileList),
+    defaultMsgType: wecomForm.value.defaultMsgType || 'text',
+    defaultContent: wecomForm.value.defaultContent || ''
+  })
+  const payload = {
+    connectionCode: 'WECOM_DEFAULT',
+    connectionName: '企微群机器人默认Webhook',
+    connectionType: 'WECOM',
+    enabled: 1,
+    baseUrl: wecomForm.value.webhookUrl || 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send',
+    authType: 'WECOM_WEBHOOK',
+    authConfig,
+    headerConfig: '{"Content-Type":"application/json"}',
+    timeoutMs: 30000,
+    remark: '由外围系统配置同步生成，使用企业微信群机器人 Webhook 推送消息'
+  }
+  const existing = (await listConnections({ connectionType: 'WECOM' }) || []).find(item => item.connectionCode === payload.connectionCode)
+  if (existing?.id) {
+    await updateConnection(existing.id, { ...existing, ...payload })
+  } else {
+    await createConnection(payload)
+  }
+}
+
+function splitComma(value) {
+  return String(value || '').split(',').map(item => item.trim()).filter(Boolean)
+}
+
+async function upsertConfig(key, value, name, description, secret = false, group = 'AI', type = 'STRING') {
   const existing = tableData.value.find(item => item.configKey === key)
   const payload = {
     id: existing?.id,
     configKey: key,
     configValue: value,
     configName: existing?.configName || name,
-    configGroup: 'AI',
-    type: 'STRING',
+    configGroup: group,
+    type,
     description: existing?.description || description,
     editable: true,
     visible: true
@@ -460,7 +638,7 @@ onMounted(async () => {
 <style scoped>
 .card-header, .header-actions { display:flex; justify-content:space-between; align-items:center; }
 .header-actions { gap: 8px; }
-.ai-quick-config {
+.ai-quick-config, .quick-config-panel {
   margin-top: 14px;
   padding: 16px 16px 0;
   background: #f8fafc;

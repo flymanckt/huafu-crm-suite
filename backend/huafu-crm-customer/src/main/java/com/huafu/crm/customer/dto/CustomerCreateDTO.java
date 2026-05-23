@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 public record CustomerCreateDTO(
     String customerCode,  // 非必填，后端自动生成
     @NotBlank @Size(max = 255, message = "客户名称不能超过255个字符") String customerName,
-    String customerShortName,
+    @NotBlank @Size(max = 128, message = "客户简称不能超过128个字符") String customerShortName,
     @NotNull Integer type,
     Integer level,
     Integer status,

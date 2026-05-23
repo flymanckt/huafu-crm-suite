@@ -7,6 +7,14 @@
       </div>
       <div class="toolbar-actions">
         <el-button :icon="Setting" circle title="列格式" @click="columnConfig.openDrawer()" />
+        <ExcelImportButton
+          :module-name="moduleConfig.title"
+          :fields="importFields"
+          :import-fn="importModuleRow"
+          :export-rows="tableData"
+          :transform-export-row="moduleExportRow"
+          @done="loadData"
+        />
         <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新增</el-button>
       </div>
     </div>
@@ -181,6 +189,7 @@ import { businessModules } from '@/config/businessModules'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import { createModuleRecord, deleteModuleRecord, getModuleRecordPage, updateModuleRecord } from '@/api/moduleRecord'
 import { useColumnConfig } from '@/composables/useColumnConfig'
@@ -235,6 +244,20 @@ const batchFields = computed(() => [
     key: `payload.${field.key}`,
     label: field.label,
     type: field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : 'text'
+  }))
+])
+const importFields = computed(() => [
+  { key: 'recordNo', label: '编号', example: '自动生成可留空' },
+  { key: 'ownerName', label: '负责人' },
+  { key: 'recordDate', label: '日期', type: 'date', example: new Date().toISOString().slice(0, 10) },
+  { key: 'status', label: '状态', valueMap: { 草稿: 'DRAFT', 进行中: 'ACTIVE', 已完成: 'DONE' }, example: '进行中' },
+  { key: 'remark', label: '备注' },
+  ...moduleConfig.value.fields.map(field => ({
+    key: field.key,
+    label: field.label,
+    type: field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : 'text',
+    required: !!field.required,
+    example: field.required ? `${field.label}示例` : ''
   }))
 ])
 const filterPreset = useFilterPreset({ pageCode })
@@ -324,6 +347,32 @@ const buildRecord = () => {
     remark: form.remark
   }
 }
+
+const importModuleRow = (row) => {
+  const payload = {}
+  moduleConfig.value.fields.forEach(field => {
+    if (row[field.key] !== undefined) payload[field.key] = row[field.key]
+  })
+  const title = payload[moduleConfig.value.primaryField] || row.recordNo || moduleConfig.value.title
+  return createModuleRecord(moduleKey.value, {
+    recordNo: row.recordNo || '',
+    title,
+    status: row.status || 'ACTIVE',
+    ownerName: row.ownerName || '',
+    recordDate: row.recordDate || new Date().toISOString().slice(0, 10),
+    payloadJson: JSON.stringify(payload),
+    remark: row.remark || ''
+  })
+}
+
+const moduleExportRow = (row) => ({
+  recordNo: row.recordNo || '',
+  ownerName: row.ownerName || '',
+  recordDate: row.recordDate || '',
+  status: row.status || '',
+  remark: row.remark || '',
+  ...payloadOf(row)
+})
 
 const handleSave = async () => {
   await formRef.value?.validate()

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huafu.crm.common.api.PageResult;
 import com.huafu.crm.common.context.UserContext;
@@ -199,7 +200,9 @@ public class CrmCustomerSapInfoServiceImpl implements CrmCustomerSapInfoService 
                 .eq(IntegrationInterface::getInterfaceCode, SAP_CUS_INTERFACE_CODE)
                 .eq(IntegrationInterface::getDeleted, (short) 0)
                 .last("LIMIT 1"));
-        boolean ready = iface != null && Short.valueOf((short) 1).equals(iface.getEnabled());
+        boolean ready = iface != null
+                && Short.valueOf((short) 1).equals(iface.getEnabled())
+                && triggerMatches(iface, info, action);
 
         IntegrationLog log = new IntegrationLog();
         log.setInterfaceCode(SAP_CUS_INTERFACE_CODE);
@@ -210,13 +213,70 @@ public class CrmCustomerSapInfoServiceImpl implements CrmCustomerSapInfoService 
         log.setBusinessKey("CUSTOMER_SAP_INFO:" + info.getCustomerId() + ":" + info.getId());
         log.setStatus(ready ? "PENDING" : "FAILED");
         log.setRequestPayload(toJson(buildSapCusPayload(info, action, iface)));
-        log.setErrorMessage(ready ? null : "接口定义SAP_CUS不存在或未启用");
+        log.setErrorMessage(ready ? null : sapCusNotReadyMessage(iface, action));
         log.setRetryCount(0);
         log.setCreatedBy(currentUserId());
         log.setCreatedTime(LocalDateTime.now());
         log.setUpdatedTime(LocalDateTime.now());
         log.setDeleted((short) 0);
         logMapper.insert(log);
+    }
+
+    private boolean triggerMatches(IntegrationInterface iface, CrmCustomerSapInfo info, String action) {
+        String mode = StringUtils.hasText(iface.getTriggerMode()) ? iface.getTriggerMode() : "ON_SAVE";
+        String resource = StringUtils.hasText(iface.getTriggerResource()) ? iface.getTriggerResource() : "CUSTOMER_SAP_INFO";
+        if (!"ANY".equals(resource) && !"CUSTOMER_SAP_INFO".equals(resource)) return false;
+        if ("MANUAL".equals(mode)) return false;
+        boolean eventMatched;
+        if ("ON_SAVE".equals(mode) || "CUSTOM".equals(mode)) {
+            eventMatched = true;
+        } else if ("ON_CREATE".equals(mode)) {
+            eventMatched = "CREATE".equals(action);
+        } else if ("ON_UPDATE".equals(mode)) {
+            eventMatched = "UPDATE".equals(action);
+        } else {
+            eventMatched = false;
+        }
+        return eventMatched && conditionMatches(iface.getTriggerConditionJson(), info);
+    }
+
+    private boolean conditionMatches(String conditionJson, CrmCustomerSapInfo info) {
+        if (!StringUtils.hasText(conditionJson)) return true;
+        try {
+            JsonNode root = objectMapper.readTree(conditionJson);
+            if (root == null || root.isEmpty()) return true;
+            String field = root.path("field").asText("");
+            String operator = root.path("operator").asText("notEmpty");
+            String expected = root.path("value").asText(null);
+            String actual = sapInfoFieldValue(info, field);
+            if ("empty".equals(operator)) return !StringUtils.hasText(actual);
+            if ("equals".equals(operator)) return expected != null && expected.equals(actual);
+            if ("notEquals".equals(operator)) return expected == null || !expected.equals(actual);
+            return StringUtils.hasText(actual);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private String sapInfoFieldValue(CrmCustomerSapInfo info, String field) {
+        if (info == null || !StringUtils.hasText(field)) return null;
+        return switch (field) {
+            case "sapCode" -> info.getSapCode();
+            case "accountGroup" -> info.getAccountGroup();
+            case "countryCode" -> info.getCountryCode();
+            case "companyCode" -> info.getCompanyCode();
+            case "salesOrg" -> info.getSalesOrg();
+            case "distributionChannel" -> info.getDistributionChannel();
+            case "division" -> info.getDivision();
+            case "description" -> info.getDescription();
+            default -> null;
+        };
+    }
+
+    private String sapCusNotReadyMessage(IntegrationInterface iface, String action) {
+        if (iface == null) return "接口定义SAP_CUS不存在";
+        if (!Short.valueOf((short) 1).equals(iface.getEnabled())) return "接口定义SAP_CUS未启用";
+        return "接口定义SAP_CUS触发条件不匹配，当前动作：" + action;
     }
 
     private Map<String, Object> buildSapCusPayload(CrmCustomerSapInfo info, String action, IntegrationInterface iface) {
@@ -231,7 +291,8 @@ public class CrmCustomerSapInfoServiceImpl implements CrmCustomerSapInfoService 
         payload.put("sapResponsePath", "/crm/v1/customers/" + customerId + "/sap-infos/" + info.getId() + "/sap-response");
         payload.put("customer", customerMapper.selectById(customerId));
         payload.put("sapInfo", info);
-        payload.put("sapInfos", getByCustomerId(customerId));
+        payload.put("sapInfos", List.of(info));
+        payload.put("allSapInfos", getByCustomerId(customerId));
         payload.put("sapOrgs", sapOrgMapper.selectList(new LambdaQueryWrapper<CrmCustomerSapOrg>()
                 .eq(CrmCustomerSapOrg::getCustomerId, customerId)
                 .eq(CrmCustomerSapOrg::getDeleted, 0)

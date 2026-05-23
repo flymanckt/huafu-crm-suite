@@ -34,10 +34,10 @@ public class DailyReportAiParseProcessor {
             return;
         }
         Map<String, Object> report = jdbcTemplate.queryForMap(
-                "SELECT id, user_id, raw_content FROM crm_daily_report WHERE id = ?",
+                "SELECT id, user_id, COALESCE(content_text, '') AS content_text FROM crm_daily_report WHERE id = ?",
                 dailyReportId);
         String userId = String.valueOf(report.get("user_id"));
-        String rawContent = String.valueOf(report.get("raw_content"));
+        String rawContent = String.valueOf(report.get("content_text"));
         Long logId = insertAiLog(dailyReportId, rawContent);
         try {
             DailyReportAiResult result = requestAiParse(rawContent);
@@ -48,8 +48,10 @@ public class DailyReportAiParseProcessor {
                         opportunity_count = ?,
                         market_intelligence_count = ?,
                         lost_order_count = ?,
-                        ai_parse_status = 'PARSED',
-                        updated_at = CURRENT_TIMESTAMP
+                        parse_status = 2,
+                        parse_error = NULL,
+                        parse_time = CURRENT_TIMESTAMP,
+                        updated_time = CURRENT_TIMESTAMP
                     WHERE id = ?
                     """, responseJson, result.opportunityCount(), result.marketIntelligenceCount(), result.lostOrderCount(), dailyReportId);
             writeBusinessRows(rawContent, userId);
@@ -61,11 +63,15 @@ public class DailyReportAiParseProcessor {
             writeAckOutbox(userId, dailyReportId, result, rawContent);
         } catch (Exception ex) {
             jdbcTemplate.update("""
-                    UPDATE crm_daily_report SET ai_parse_status = 'FAILED', updated_at = CURRENT_TIMESTAMP WHERE id = ?
-                    """, dailyReportId);
+                    UPDATE crm_daily_report
+                    SET parse_status = 3,
+                        parse_error = ?,
+                        updated_time = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """, abbreviate(ex.getMessage(), 480), dailyReportId);
             jdbcTemplate.update("""
                     UPDATE crm_ai_parse_log SET status = 'FAILED', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-                    """, ex.getMessage(), logId);
+                    """, abbreviate(ex.getMessage(), 480), logId);
             throw new IllegalStateException("daily report AI parse failed", ex);
         }
     }

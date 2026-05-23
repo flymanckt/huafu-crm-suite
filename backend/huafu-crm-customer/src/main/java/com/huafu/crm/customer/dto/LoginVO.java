@@ -4,5 +4,5 @@ public record LoginVO(
     String token,
     UserInfoVO user
 ) {
-    public record UserInfoVO(Long id, String username, String realName, Integer status) {}
+    public record UserInfoVO(Long id, String username, String realName, Long deptId, Integer status) {}
 }

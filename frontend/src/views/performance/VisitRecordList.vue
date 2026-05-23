@@ -6,6 +6,7 @@
           <span>拜访记录</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
+            <ExcelImportButton module-name="拜访记录" :fields="importFields" :import-fn="importVisitRow" :export-rows="tableData" @done="loadData" />
             <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新增拜访</el-button>
           </div>
         </div>
@@ -99,6 +100,7 @@ import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { getCustomerAddressList } from '@/api/customer'
 import { regeocode } from '@/utils/amap'
@@ -162,6 +164,20 @@ const defaultForm = () => ({
   remark: ''
 })
 const form = ref(defaultForm())
+const importFields = [
+  { key: 'visitDate', label: '拜访日期', type: 'date', required: true, example: today },
+  { key: 'visitType', label: '拜访类型', type: 'number', valueMap: { 上门: 1, 电话: 2, 微信: 3, 展会: 4 }, example: '上门' },
+  { key: 'customerId', label: '客户ID', type: 'number' },
+  { key: 'customerName', label: '客户名称', required: true, example: '浙江云泰纺织有限公司' },
+  { key: 'contactName', label: '联系人', example: '张三' },
+  { key: 'visitPurpose', label: '拜访目的', example: '年度合作沟通' },
+  { key: 'visitContent', label: '拜访内容' },
+  { key: 'checkinAddress', label: '打卡地址' },
+  { key: 'nextVisitPlan', label: '下次拜访', type: 'date' },
+  { key: 'isNewCustomer', label: '新客户', type: 'number', valueMap: { 是: 1, 否: 0 } },
+  { key: 'remark', label: '备注' }
+]
+const importVisitRow = (row) => createVisitRecord({ ...defaultForm(), userId: userInfo().id || 1, ...row })
 
 const checkinResultText = { MATCHED: '通过', MISMATCHED: '超距', NO_ADDRESS: '无地址', UNCHECKED: '未校验' }
 const checkinTagType = { MATCHED: 'success', MISMATCHED: 'danger', NO_ADDRESS: 'warning', UNCHECKED: 'info' }

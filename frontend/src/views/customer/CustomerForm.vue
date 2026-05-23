@@ -3,7 +3,8 @@
     v-if="asDialog"
     :model-value="visible"
     :title="isEdit ? '编辑客户' : '新建客户'"
-    width="800px"
+    width="1040px"
+    class="customer-form-dialog"
     destroy-on-close
     @close="handleCancel"
   >
@@ -25,12 +26,12 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="客户名称简称">
-                  <el-input v-model="form.customerShortName" placeholder="请输入客户名称简称" maxlength="128" />
+                <el-form-item label="客户简称" prop="customerShortName">
+                  <el-input v-model="form.customerShortName" placeholder="请输入客户简称" maxlength="128" />
                 </el-form-item>
               </el-col>
-              <el-col :span="12">
-                <el-form-item v-if="isEdit" label="客户编码" prop="customerCode">
+              <el-col v-if="isEdit" :span="12">
+                <el-form-item label="客户编码" prop="customerCode">
                   <el-input v-model="form.customerCode" placeholder="系统自动生成" disabled />
                 </el-form-item>
               </el-col>
@@ -62,14 +63,14 @@
                     :props="{ label: 'deptName', value: 'id', children: 'children' }"
                     check-strictly
                     clearable
-                    placeholder="请选择归属部门"
+                    placeholder="默认取当前用户部门"
                     style="width:100%"
                   />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item label="负责人">
-                  <el-select v-model="form.ownerUserId" placeholder="请选择负责人" clearable filterable style="width:100%">
+                  <el-select v-model="form.ownerUserId" placeholder="默认取当前用户" clearable filterable style="width:100%">
                     <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
                   </el-select>
                 </el-form-item>
@@ -144,7 +145,7 @@
               </el-col>
             </el-row>
 
-            <el-divider content-position="left">财务信息</el-divider>
+            <el-divider content-position="left">经营规模</el-divider>
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="年营业额(万元)">
@@ -152,22 +153,8 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="信用额度(万元)">
-                  <el-input-number v-model="form.creditLimit" :precision="2" :min="0" style="width:100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="账期(天)">
-                  <el-input-number v-model="form.paymentDays" :min="0" style="width:100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <el-divider content-position="left">SAP基础信息</el-divider>
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="SAP客户编码">
-                  <el-input v-model="form.sapCustomerCode" placeholder="请输入SAP客户编码" />
+                <el-form-item label="年用纱量">
+                  <el-input-number v-model="form.annualYarnVolume" :precision="2" :min="0" style="width:100%" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -254,12 +241,12 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="客户名称简称">
-                    <el-input v-model="form.customerShortName" placeholder="请输入客户名称简称" maxlength="128" />
+                  <el-form-item label="客户简称" prop="customerShortName">
+                    <el-input v-model="form.customerShortName" placeholder="请输入客户简称" maxlength="128" />
                   </el-form-item>
                 </el-col>
-                <el-col :span="12">
-                  <el-form-item v-if="isEdit" label="客户编码" prop="customerCode">
+                <el-col v-if="isEdit" :span="12">
+                  <el-form-item label="客户编码" prop="customerCode">
                     <el-input v-model="form.customerCode" placeholder="系统自动生成" disabled />
                   </el-form-item>
                 </el-col>
@@ -291,14 +278,14 @@
                       :props="{ label: 'deptName', value: 'id', children: 'children' }"
                       check-strictly
                       clearable
-                      placeholder="请选择归属部门"
+                    placeholder="默认取当前用户部门"
                       style="width:100%"
                     />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
                   <el-form-item label="负责人">
-                    <el-select v-model="form.ownerUserId" placeholder="请选择负责人" clearable filterable style="width:100%">
+                  <el-select v-model="form.ownerUserId" placeholder="默认取当前用户" clearable filterable style="width:100%">
                       <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
                     </el-select>
                   </el-form-item>
@@ -373,7 +360,7 @@
                 </el-col>
               </el-row>
 
-              <el-divider content-position="left">财务信息</el-divider>
+              <el-divider content-position="left">经营规模</el-divider>
               <el-row :gutter="16">
                 <el-col :span="12">
                   <el-form-item label="年营业额(万元)">
@@ -381,22 +368,8 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="信用额度(万元)">
-                    <el-input-number v-model="form.creditLimit" :precision="2" :min="0" style="width:100%" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="12">
-                  <el-form-item label="账期(天)">
-                    <el-input-number v-model="form.paymentDays" :min="0" style="width:100%" />
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-divider content-position="left">SAP基础信息</el-divider>
-              <el-row :gutter="16">
-                <el-col :span="12">
-                  <el-form-item label="SAP客户编码">
-                    <el-input v-model="form.sapCustomerCode" placeholder="请输入SAP客户编码" />
+                  <el-form-item label="年用纱量">
+                    <el-input-number v-model="form.annualYarnVolume" :precision="2" :min="0" style="width:100%" />
                   </el-form-item>
                 </el-col>
               </el-row>
@@ -474,8 +447,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createCustomer, getCustomerDetail, updateCustomer, createContactV1 } from '@/api/customer'
-import { getDeptTree, getUserPage } from '@/api/admin'
+import { createCustomer, getCustomerDetail, updateCustomer, createContactV1, getCustomerPage } from '@/api/customer'
+import { getDeptTree, getUserPage, getUserDetail } from '@/api/admin'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { buildCustomerUpdatePayload, normalizeCustomerForForm } from '@/utils/customerFields'
@@ -500,6 +473,7 @@ const currentStep = ref(0)
 const step1FormRef = ref()
 const deptTree = ref([])
 const userOptions = ref([])
+const duplicateChecking = ref(false)
 
 const defaultForm = () => ({
   // === 基础信息 ===
@@ -583,8 +557,35 @@ const contacts = ref([{ contactName: '', position: '', phone: '', telephone: '',
 const addressPickerVisible = ref(false)
 const addressVerifying = ref(false)
 
+const validateUniqueCustomerName = async (_rule, value, callback) => {
+  const name = (value || '').trim()
+  if (!name) {
+    callback()
+    return
+  }
+  duplicateChecking.value = true
+  try {
+    const data = await getCustomerPage({ current: 1, size: 10, customerName: name })
+    const records = data?.records || data?.list || data?.data?.records || []
+    const duplicated = records.some(item =>
+      String(item.id) !== String(currentId.value || '') &&
+      String(item.customerName || '').trim() === name
+    )
+    if (duplicated) callback(new Error('客户清单中已存在同名客户，请确认后再创建'))
+    else callback()
+  } catch {
+    callback()
+  } finally {
+    duplicateChecking.value = false
+  }
+}
+
 const step1Rules = {
-  customerName: [{ required: true, message: '请输入客户名称', trigger: 'blur' }],
+  customerName: [
+    { required: true, message: '请输入客户名称', trigger: 'blur' },
+    { validator: validateUniqueCustomerName, trigger: 'blur' }
+  ],
+  customerShortName: [{ required: true, message: '请输入客户简称', trigger: 'blur' }],
   type: [{ required: true, message: '请选择客户类型', trigger: 'change' }],
   status: [{ required: true, message: '请选择客户状态', trigger: 'change' }],
   businessType: [{ required: true, message: '请选择业务类型', trigger: 'change' }],
@@ -601,17 +602,55 @@ const regionOptions = provinceCityDistrict.map(province => ({
   }))
 }))
 
+const getStoredUserInfo = () => {
+  try {
+    return JSON.parse(localStorage.getItem('userInfo') || '{}')
+  } catch {
+    return {}
+  }
+}
+
+const currentUserId = () => {
+  const user = getStoredUserInfo()
+  return user.id || localStorage.getItem('userId') || null
+}
+
+const applyCurrentUserDefaults = async () => {
+  if (isEdit.value) return
+  const storedUser = getStoredUserInfo()
+  const id = currentUserId()
+  if (!id) return
+  if (!form.value.ownerUserId) form.value.ownerUserId = Number(id)
+  if (storedUser?.deptId && !form.value.ownerDeptId) {
+    form.value.ownerDeptId = storedUser.deptId
+    return
+  }
+  let currentUser = userOptions.value.find(user => String(user.id) === String(id))
+  if (!currentUser) {
+    try {
+      currentUser = await getUserDetail(id)
+    } catch {
+      currentUser = null
+    }
+  }
+  if (currentUser?.deptId && !form.value.ownerDeptId) {
+    form.value.ownerDeptId = currentUser.deptId
+  }
+}
+
 const loadOptions = async () => {
   try {
     const [depts, users] = await Promise.all([
       getDeptTree(),
-      getUserPage({ pageNum: 1, pageSize: 200 })
+      getUserPage({ current: 1, size: 200 })
     ])
     deptTree.value = depts || []
     userOptions.value = users?.records || users?.list || users || []
+    await applyCurrentUserDefaults()
   } catch (error) {
     deptTree.value = []
     userOptions.value = []
+    await applyCurrentUserDefaults()
   }
 }
 
@@ -629,6 +668,8 @@ const loadDetail = async () => {
     if (data.province) addressRegion.value = [data.province, data.city, data.district].filter(Boolean)
     if (data.paymentDays != null) form.value.paymentDays = Number(data.paymentDays)
     if (data.machineCount != null) form.value.machineCount = Number(data.machineCount)
+  } else {
+    await applyCurrentUserDefaults()
   }
 }
 
@@ -703,6 +744,9 @@ const removeContact = (index) => {
 const handleSubmit = async () => {
   submitting.value = true
   try {
+    await step1FormRef.value?.validate()
+    form.value.customerName = form.value.customerName?.trim() || ''
+    form.value.customerShortName = form.value.customerShortName?.trim() || ''
     if (form.value.paymentDays != null) form.value.paymentDays = Number(form.value.paymentDays)
     if (form.value.machineCount != null) form.value.machineCount = Number(form.value.machineCount)
 
@@ -755,22 +799,32 @@ onMounted(() => {
 
 <style scoped>
 .form-container {
-  padding: 20px 0;
+  padding: 8px 0 0;
 }
 .form-steps {
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 .step-content {
-  min-height: 300px;
+  min-height: 360px;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  padding: 4px 4px 0;
 }
 .step-panel {
-  padding: 16px 0;
+  padding: 10px 4px 0;
+}
+.step-panel :deep(.el-divider--horizontal) {
+  margin: 10px 0 18px;
+}
+.step-panel :deep(.el-form-item) {
+  margin-bottom: 18px;
 }
 .step-footer {
-  margin-top: 24px;
+  margin-top: 16px;
   text-align: center;
   padding-top: 16px;
   border-top: 1px solid var(--el-border-color-lighter);
+  background: #fff;
 }
 
 .contact-item {
@@ -789,6 +843,13 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   width: 100%;
+}
+.customer-form-dialog :deep(.el-dialog__body) {
+  padding-top: 12px;
+}
+.customer-form-dialog :deep(.el-steps--simple) {
+  padding: 12px 16px;
+  border-radius: 6px;
 }
 
 @media (max-width: 768px) {

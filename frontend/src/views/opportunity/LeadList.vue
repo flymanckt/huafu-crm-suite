@@ -6,6 +6,7 @@
           <span>线索与商情</span>
           <div class="header-actions">
             <el-button :icon="Setting" circle title="列配置" @click="columnConfig.openDrawer()" />
+            <ExcelImportButton module-name="线索" :fields="importFields" :import-fn="createLead" :export-rows="tableData" @done="loadData" />
             <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>录入线索</el-button>
           </div>
         </div>
@@ -94,6 +95,7 @@ import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -137,6 +139,18 @@ const batchFields = [
   { key: 'source', label: '来源', dictCode: 'lead_source', valueType: 'number' },
   { key: 'productName', label: '意向产品' },
   { key: 'competitorName', label: '竞品名称' },
+  { key: 'remark', label: '备注' }
+]
+const importFields = [
+  { key: 'leadType', label: '类型', type: 'number', valueMap: { 商情: 1, 线索: 2 }, example: '线索' },
+  { key: 'customerName', label: '客户名称', required: true, example: '浙江云泰纺织有限公司' },
+  { key: 'contactName', label: '联系人', example: '张三' },
+  { key: 'contactPhone', label: '联系电话', example: '13800000000' },
+  { key: 'province', label: '省份', example: '浙江省' },
+  { key: 'city', label: '城市', example: '杭州市' },
+  { key: 'productName', label: '意向产品', example: '棉纱' },
+  { key: 'competitorName', label: '竞品名称' },
+  { key: 'source', label: '来源', type: 'number', valueMap: { 日报AI: 1, 展会: 2, 主动开发: 3, 转介绍: 4 }, example: '主动开发' },
   { key: 'remark', label: '备注' }
 ]
 

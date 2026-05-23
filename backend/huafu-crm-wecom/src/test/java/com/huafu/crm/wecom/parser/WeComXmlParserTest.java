@@ -33,4 +33,12 @@ class WeComXmlParserTest {
         assertThat(message.fromUser()).isEmpty();
         assertThat(message.content()).isEqualTo("not xml");
     }
+
+    @Test
+    void parseShouldStripMentionPrefixAndReadJsonContent() {
+        WeComXmlParser.ParsedMessage message = parser.parse("{\"content\":\"@CRM机器人 今日日报：拜访客户A\"}");
+
+        assertThat(message.msgType()).isEqualTo("text");
+        assertThat(message.content()).isEqualTo("今日日报：拜访客户A");
+    }
 }

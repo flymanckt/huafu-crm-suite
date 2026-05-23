@@ -288,6 +288,7 @@ public class SapJcoReflectionService implements SapJcoService {
         if (sourceField.startsWith("customer.")
             || sourceField.startsWith("sapInfo.")
             || sourceField.startsWith("sapInfos[].")
+            || sourceField.startsWith("allSapInfos[].")
             || sourceField.startsWith("sapOrgs[].")
             || sourceField.startsWith("payload.")) {
             return sourceField;
@@ -303,6 +304,9 @@ public class SapJcoReflectionService implements SapJcoService {
         }
         if ("customerSapInfo".equals(sourceModule)) {
             return "sapInfos[]." + sourceField;
+        }
+        if ("customerSapInfoAll".equals(sourceModule)) {
+            return "allSapInfos[]." + sourceField;
         }
         if ("customerSapOrg".equals(sourceModule)) {
             return "sapOrgs[]." + sourceField;

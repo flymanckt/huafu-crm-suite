@@ -7,6 +7,14 @@
           <div class="header-actions">
             <!-- 列配置按钮 -->
             <el-button :icon="Setting" circle @click="columnConfig.openDrawer()" title="列配置" />
+            <ExcelImportButton
+              v-if="activeTab === 'all'"
+              module-name="客户"
+              :fields="importFields"
+              :import-fn="importCustomerRow"
+              :export-rows="tableData"
+              @done="loadData"
+            />
             <el-button v-if="activeTab === 'all'" type="primary" @click="openCreate">
               <el-icon><Plus /></el-icon>新建客户
             </el-button>
@@ -136,7 +144,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.level" dict-code="customer_level" :value="String(row.level)" />
+              <el-tag v-if="row.level" :type="customerLevelType[row.level]">{{ customerLabel.level(row.level) }}</el-tag>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -147,7 +155,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.status" dict-code="customer_status" :value="String(row.status)" />
+              <el-tag v-if="row.status" :type="customerStatusType[row.status]">{{ customerLabel.status(row.status) }}</el-tag>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -158,7 +166,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.businessType" dict-code="biz_type" :value="String(row.businessType)" />
+              <span v-if="hasValue(row.businessType)">{{ customerLabel.businessType(row.businessType) }}</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -169,7 +177,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.type" dict-code="customer_type" :value="String(row.type)" />
+              <span v-if="hasValue(row.type)">{{ customerLabel.type(row.type) }}</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -208,7 +216,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.customerCategory" dict-code="customer_category" :value="String(row.customerCategory)" />
+              <span v-if="hasValue(row.customerCategory)">{{ customerLabel.category(row.customerCategory) }}</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -219,7 +227,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.customerSource" dict-code="customer_source" :value="String(row.customerSource)" />
+              <span v-if="hasValue(row.customerSource)">{{ customerLabel.source(row.customerSource) }}</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -230,7 +238,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.mainCustomerGroup" dict-code="customer_group" :value="String(row.mainCustomerGroup)" />
+              <span v-if="hasValue(row.mainCustomerGroup)">{{ customerLabel.group(row.mainCustomerGroup) }}</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -241,7 +249,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <DictTag v-if="row.customerStage" dict-code="customer_stage" :value="String(row.customerStage)" />
+              <span v-if="hasValue(row.customerStage)">{{ customerLabel.stage(row.customerStage) }}</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -314,17 +322,19 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { Plus, Setting, ArrowDown, Close } from '@element-plus/icons-vue'
-import { getCustomerPage, deleteCustomer, getPublicPoolPage, claimCustomer } from '@/api/customer'
+import { getCustomerPage, createCustomer, deleteCustomer, getPublicPoolPage, claimCustomer } from '@/api/customer'
 import CustomerForm from './CustomerForm.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import DictTag from '@/components/Dict/DictTag.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
+import ExcelImportButton from '@/components/common/ExcelImportButton.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig.js'
 import { useFilterPreset } from '@/composables/useFilterPreset.js'
 import { ElMessage } from 'element-plus'
 import { useDict } from '@/composables/useDict'
+import { buildCustomerUpdatePayload, customerLabel, customerLevelType, customerStatusType } from '@/utils/customerFields'
 
 const activeTab = ref('all')
 const loading = ref(false)
@@ -368,6 +378,29 @@ const batchFields = [
   { key: 'salesMerchandiser', label: '销售跟单' },
   { key: 'remark', label: '备注' }
 ]
+const importFields = [
+  { key: 'customerName', label: '客户名称', required: true, example: '浙江云泰纺织有限公司' },
+  { key: 'customerShortName', label: '客户简称', required: true, example: '云泰纺织' },
+  { key: 'type', label: '客户类型', required: true, type: 'number', valueMap: { 直接客户: 1, 代理: 2, 终端品牌: 3 }, example: '直接客户' },
+  { key: 'status', label: '客户状态', type: 'number', valueMap: { 潜在客户: 1, 活跃客户: 2, 非活跃: 3, 流失: 4, 新客户: 5, 重点客户: 6 }, example: '潜在客户' },
+  { key: 'businessType', label: '业务类型', required: true, type: 'number', valueMap: { 内销: 1, 外销: 2, 转口: 3 }, example: '内销' },
+  { key: 'category', label: '客户分类', type: 'number', valueMap: { 纱线厂: 1, 面料厂: 2, 服装厂: 3, 贸易商: 4 }, example: '纱线厂' },
+  { key: 'province', label: '省份', example: '浙江省' },
+  { key: 'city', label: '城市', example: '杭州市' },
+  { key: 'district', label: '区县', example: '萧山区' },
+  { key: 'address', label: '详细地址', example: '示例路1号' },
+  { key: 'mainContactName', label: '主联系人', example: '张三' },
+  { key: 'mainContactPhone', label: '主联系人电话', example: '13800000000' },
+  { key: 'annualRevenue', label: '年营业额', type: 'number', example: '1000' },
+  { key: 'countryRegion', label: '国家区域', example: '中国' },
+  { key: 'industryPosition', label: '行业地位', example: '区域重点客户' },
+  { key: 'remark', label: '备注' }
+]
+
+const importCustomerRow = (row) => createCustomer(buildCustomerUpdatePayload({
+  ...row,
+  status: row.status || 1
+}))
 
 // 列配置 composable
 const columnConfig = useColumnConfig()
