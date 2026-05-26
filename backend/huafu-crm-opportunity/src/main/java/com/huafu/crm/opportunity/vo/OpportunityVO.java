@@ -11,5 +11,5 @@ public record OpportunityVO(
     LocalDate expectedCloseDate, LocalDate actualCloseDate, Integer winProbability,
     String lostReason, Integer lostType, String competitorName, Long quoteId,
     String orderNo, String remark, Long sourceLeadId,
-    String createdBy, OffsetDateTime createdTime, Integer version
+    String createdBy, OffsetDateTime createdTime, Integer version, String customerName
 ) {}

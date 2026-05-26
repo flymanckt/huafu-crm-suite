@@ -67,6 +67,13 @@
       <div v-if="activeGroup === 'WECOM'" class="quick-config-panel">
         <el-form :model="wecomForm" label-width="110px">
           <el-divider content-position="left">群机器人发送</el-divider>
+          <el-alert
+            class="config-alert"
+            title="企微群机器人 Webhook 仅用于 CRM 主动向群内发送消息；不能读取群成员 @ 机器人的内容。"
+            type="info"
+            show-icon
+            :closable="false"
+          />
           <el-row :gutter="16">
             <el-col :xs="24" :md="16">
               <el-form-item label="Webhook地址">
@@ -93,6 +100,9 @@
                 <el-select v-model="wecomForm.defaultMsgType" style="width:100%">
                   <el-option label="文本消息" value="text" />
                   <el-option label="Markdown消息" value="markdown" />
+                  <el-option label="图片消息" value="image" />
+                  <el-option label="文件消息" value="file" />
+                  <el-option label="图文消息" value="news" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -107,10 +117,45 @@
               </el-form-item>
             </el-col>
           </el-row>
-          <el-divider content-position="left">消息接收写入CRM</el-divider>
+          <el-divider content-position="left">群消息采集写入CRM</el-divider>
+          <el-alert
+            class="config-alert"
+            title="最终接收方案为：企业微信智能机器人官方 WebSocket 长连接。CRM 使用 Bot ID 和 Secret 订阅消息，企微会把群内 @ 机器人的内容推送到 CRM。"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
           <el-row :gutter="16">
+            <el-col :xs="24">
+              <el-alert
+                class="config-alert"
+                title="如果你只有 Bot ID 和 Secret，只需要填写下面两项；其他配置保持默认即可。保存后重启 wecom 服务，CRM 会按官方长连接模式订阅消息。"
+                type="success"
+                show-icon
+                :closable="false"
+              />
+            </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="启用接收">
+              <el-form-item label="Bot ID">
+                <el-input v-model="wecomForm.cliBotId" placeholder="企业微信智能机器人 Bot ID" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="Bot Secret">
+                <el-input v-model="wecomForm.cliBotSecret" type="password" show-password placeholder="企业微信智能机器人 Secret" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="接收模式">
+                <el-select v-model="wecomForm.receiveMode" style="width:100%">
+                  <el-option label="官方智能机器人长连接" value="WECOM_AI_BOT" />
+                  <el-option label="wecom-cli Agent采集" value="WECOM_CLI_AGENT" />
+                  <el-option label="企业微信应用回调" value="CALLBACK" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="启用写入">
                 <el-switch v-model="wecomForm.receiveEnabled" />
               </el-form-item>
             </el-col>
@@ -126,6 +171,54 @@
               <el-form-item label="回调地址">
                 <el-input v-model="wecomForm.receiveCallbackUrl" placeholder="/api/wecom/callback" />
               </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="16">
+              <el-form-item label="长连接地址">
+                <el-input v-model="wecomForm.aibotWebsocketUrl" placeholder="wss://openws.work.weixin.qq.com" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-collapse>
+                <el-collapse-item title="高级配置：部署人员需要时再展开" name="wecom-cli-advanced">
+                  <el-row :gutter="16">
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="CLI路径">
+                <el-input v-model="wecomForm.cliBinary" placeholder="wecom-cli" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="配置目录">
+                <el-input v-model="wecomForm.cliConfigDir" placeholder="默认 ~/.config/wecom，可留空" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="轮询秒数">
+                <el-input-number v-model="wecomForm.cliPollIntervalSeconds" :min="5" :max="3600" controls-position="right" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="消息品类">
+                <el-input v-model="wecomForm.cliMessageCategory" placeholder="msg" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="消息方法">
+                <el-input v-model="wecomForm.cliMessageMethod" placeholder="按 wecom-cli msg --help 的结果填写" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="8">
+              <el-form-item label="群白名单">
+                <el-input v-model="wecomForm.cliRoomAllowlist" placeholder="多个群ID/群名用逗号分隔" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-form-item label="命令模板">
+                <el-input v-model="wecomForm.cliCommandTemplate" placeholder="wecom-cli msg {method} '{jsonArgs}'" />
+              </el-form-item>
+            </el-col>
+                  </el-row>
+                </el-collapse-item>
+              </el-collapse>
             </el-col>
             <el-col :xs="24" :md="16">
               <el-form-item label="关键词">
@@ -312,12 +405,23 @@ const wecomForm = ref({
   mentionedMobileList: '',
   defaultMsgType: 'text',
   defaultContent: '',
+  receiveMode: 'WECOM_AI_BOT',
   receiveEnabled: true,
   receiveCallbackUrl: '/api/wecom/callback',
+  aibotWebsocketUrl: 'wss://openws.work.weixin.qq.com',
   receiveToken: '',
   receiveEncodingAesKey: '',
   receiveWriteMode: 'KEYWORD_DAILY_REPORT',
-  receiveKeywords: '日报,商机,商情,丢单,拜访,客户'
+  receiveKeywords: '日报,商机,商情,丢单,拜访,客户',
+  cliBotId: '',
+  cliBotSecret: '',
+  cliBinary: 'wecom-cli',
+  cliConfigDir: '',
+  cliPollIntervalSeconds: 15,
+  cliMessageCategory: 'msg',
+  cliMessageMethod: '',
+  cliRoomAllowlist: '',
+  cliCommandTemplate: "wecom-cli msg {method} '{jsonArgs}'"
 })
 
 const defaultForm = () => ({
@@ -456,12 +560,23 @@ function syncWecomForm() {
     mentionedMobileList: configValue('wecom.mentioned_mobile_list'),
     defaultMsgType: configValue('wecom.default_msg_type') || 'text',
     defaultContent: configValue('wecom.default_content'),
+    receiveMode: configValue('wecom.receive_mode') || 'WECOM_AI_BOT',
     receiveEnabled: configValue('wecom.receive_enabled') !== 'false',
     receiveCallbackUrl: configValue('wecom.receive_callback_url') || '/api/wecom/callback',
+    aibotWebsocketUrl: configValue('wecom.aibot_websocket_url') || 'wss://openws.work.weixin.qq.com',
     receiveToken: configValue('wecom.receive_token'),
     receiveEncodingAesKey: configValue('wecom.receive_encoding_aes_key'),
     receiveWriteMode: configValue('wecom.receive_write_mode') || 'KEYWORD_DAILY_REPORT',
-    receiveKeywords: configValue('wecom.receive_keywords') || '日报,商机,商情,丢单,拜访,客户'
+    receiveKeywords: configValue('wecom.receive_keywords') || '日报,商机,商情,丢单,拜访,客户',
+    cliBotId: configValue('wecom.cli_bot_id'),
+    cliBotSecret: configValue('wecom.cli_bot_secret'),
+    cliBinary: configValue('wecom.cli_binary') || 'wecom-cli',
+    cliConfigDir: configValue('wecom.cli_config_dir'),
+    cliPollIntervalSeconds: Number(configValue('wecom.cli_poll_interval_seconds') || 15),
+    cliMessageCategory: configValue('wecom.cli_message_category') || 'msg',
+    cliMessageMethod: configValue('wecom.cli_message_method'),
+    cliRoomAllowlist: configValue('wecom.cli_room_allowlist'),
+    cliCommandTemplate: configValue('wecom.cli_command_template') || "wecom-cli msg {method} '{jsonArgs}'"
   }
 }
 
@@ -477,14 +592,25 @@ async function saveWecomQuickConfig() {
       upsertConfig('wecom.robot_key', wecomForm.value.robotKey, '企微机器人Key', 'Webhook URL 中的 key 参数；如果 Webhook 地址已包含 key 可留空', true, 'WECOM'),
       upsertConfig('wecom.mentioned_list', wecomForm.value.mentionedList, '企微默认@成员ID', '文本消息默认 @ 的成员ID，多个用逗号分隔，@all 表示所有人', false, 'WECOM'),
       upsertConfig('wecom.mentioned_mobile_list', wecomForm.value.mentionedMobileList, '企微默认@手机号', '文本消息默认 @ 的手机号，多个用逗号分隔', false, 'WECOM'),
-      upsertConfig('wecom.default_msg_type', wecomForm.value.defaultMsgType, '企微默认消息类型', '群机器人默认消息类型：text/markdown', false, 'WECOM'),
+      upsertConfig('wecom.default_msg_type', wecomForm.value.defaultMsgType, '企微默认消息类型', '群机器人默认消息类型：text/markdown/image/file/news；完整 msgtype 消息体会原样发送', false, 'WECOM'),
       upsertConfig('wecom.default_content', wecomForm.value.defaultContent, '企微默认消息内容', '接口未映射消息内容时使用的兜底文本', false, 'WECOM'),
-      upsertConfig('wecom.receive_enabled', String(Boolean(wecomForm.value.receiveEnabled)), '启用企微消息接收', '启用后，企微群内 @机器人 的消息可通过回调写入CRM', false, 'WECOM', 'BOOLEAN'),
-      upsertConfig('wecom.receive_callback_url', wecomForm.value.receiveCallbackUrl, '企微接收回调地址', '配置到企业微信接收消息的回调URL', false, 'WECOM'),
-      upsertConfig('wecom.receive_token', wecomForm.value.receiveToken, '企微接收Token', '企业微信回调URL验证Token', true, 'WECOM'),
-      upsertConfig('wecom.receive_encoding_aes_key', wecomForm.value.receiveEncodingAesKey, '企微接收EncodingAESKey', '企业微信回调消息加解密EncodingAESKey；当前系统优先支持明文/已解密消息入库', true, 'WECOM'),
+      upsertConfig('wecom.receive_mode', wecomForm.value.receiveMode, '企微消息接收模式', 'WECOM_AI_BOT=企业微信智能机器人官方WebSocket长连接；WECOM_CLI_AGENT=wecom-cli备用采集；CALLBACK=企业微信应用回调投递CRM', false, 'WECOM'),
+      upsertConfig('wecom.receive_enabled', String(Boolean(wecomForm.value.receiveEnabled)), '启用企微消息写入', '启用后，企业微信智能机器人长连接、wecom-cli Agent或企业微信应用回调投递的消息可写入CRM', false, 'WECOM', 'BOOLEAN'),
+      upsertConfig('wecom.receive_callback_url', wecomForm.value.receiveCallbackUrl, '企微消息投递地址', 'wecom-cli Agent或企业微信应用回调投递消息到CRM的URL', false, 'WECOM'),
+      upsertConfig('wecom.aibot_websocket_url', wecomForm.value.aibotWebsocketUrl, '企微智能机器人WebSocket地址', '企业微信智能机器人官方长连接网关地址，默认 wss://openws.work.weixin.qq.com', false, 'WECOM'),
+      upsertConfig('wecom.receive_token', wecomForm.value.receiveToken, '企微回调Token', '企业微信应用回调URL验证Token；wecom-cli Agent模式可留空或用于自定义签名', true, 'WECOM'),
+      upsertConfig('wecom.receive_encoding_aes_key', wecomForm.value.receiveEncodingAesKey, '企微EncodingAESKey', '企业微信应用回调消息加解密EncodingAESKey；wecom-cli Agent模式不需要', true, 'WECOM'),
       upsertConfig('wecom.receive_write_mode', wecomForm.value.receiveWriteMode, '企微写入策略', 'KEYWORD_DAILY_REPORT=命中关键词写日报并AI解析；ALL_DAILY_REPORT=所有文本写日报并AI解析', false, 'WECOM'),
-      upsertConfig('wecom.receive_keywords', wecomForm.value.receiveKeywords, '企微写入关键词', '命中这些关键词的@机器人内容会写入CRM日报并触发AI解析，多个用逗号分隔', false, 'WECOM')
+      upsertConfig('wecom.receive_keywords', wecomForm.value.receiveKeywords, '企微写入关键词', '命中这些关键词的@机器人内容会写入CRM日报并触发AI解析，多个用逗号分隔', false, 'WECOM'),
+      upsertConfig('wecom.cli_bot_id', wecomForm.value.cliBotId, '企微智能机器人Bot ID', 'wecom-cli init手动配置时使用的Bot ID', false, 'WECOM'),
+      upsertConfig('wecom.cli_bot_secret', wecomForm.value.cliBotSecret, '企微智能机器人Secret', 'wecom-cli init手动配置时使用的Secret；页面按敏感配置脱敏展示', true, 'WECOM'),
+      upsertConfig('wecom.cli_binary', wecomForm.value.cliBinary, 'wecom-cli命令路径', 'Agent执行的wecom-cli命令路径；可填写绝对路径或PATH中的命令名', false, 'WECOM'),
+      upsertConfig('wecom.cli_config_dir', wecomForm.value.cliConfigDir, 'wecom-cli配置目录', 'wecom-cli init生成的凭证目录；为空时使用默认 ~/.config/wecom', false, 'WECOM'),
+      upsertConfig('wecom.cli_poll_interval_seconds', String(wecomForm.value.cliPollIntervalSeconds || 15), 'wecom-cli轮询间隔秒', '外部Agent拉取群消息的轮询间隔，建议不低于15秒', false, 'WECOM', 'INT'),
+      upsertConfig('wecom.cli_message_category', wecomForm.value.cliMessageCategory, 'wecom-cli消息品类', 'wecom-cli命令品类，群消息相关通常使用msg', false, 'WECOM'),
+      upsertConfig('wecom.cli_message_method', wecomForm.value.cliMessageMethod, 'wecom-cli消息方法', '通过wecom-cli msg --help查询后填写实际拉取群消息的方法名', false, 'WECOM'),
+      upsertConfig('wecom.cli_room_allowlist', wecomForm.value.cliRoomAllowlist, 'wecom-cli群白名单', '允许Agent采集的群ID或群名，多个用逗号分隔；为空表示由Agent自行控制', false, 'WECOM'),
+      upsertConfig('wecom.cli_command_template', wecomForm.value.cliCommandTemplate, 'wecom-cli命令模板', 'Agent执行命令模板，支持{method}和{jsonArgs}占位', false, 'WECOM')
     ])
     await upsertWecomConnection()
     ElMessage.success('企微配置已保存，并已同步到集成平台连接')
@@ -500,7 +626,23 @@ async function upsertWecomConnection() {
     mentionedList: splitComma(wecomForm.value.mentionedList),
     mentionedMobileList: splitComma(wecomForm.value.mentionedMobileList),
     defaultMsgType: wecomForm.value.defaultMsgType || 'text',
-    defaultContent: wecomForm.value.defaultContent || ''
+    defaultContent: wecomForm.value.defaultContent || '',
+    supportedMsgTypes: ['text', 'markdown', 'image', 'file', 'news'],
+    rateLimitPerMinute: 20,
+    receiveMode: wecomForm.value.receiveMode || 'WECOM_AI_BOT',
+    callbackUrl: wecomForm.value.receiveCallbackUrl || '/api/wecom/callback',
+    websocketUrl: wecomForm.value.aibotWebsocketUrl || 'wss://openws.work.weixin.qq.com',
+    cli: {
+      botId: wecomForm.value.cliBotId || '',
+      botSecretConfigured: Boolean(wecomForm.value.cliBotSecret),
+      binary: wecomForm.value.cliBinary || 'wecom-cli',
+      configDir: wecomForm.value.cliConfigDir || '',
+      pollIntervalSeconds: wecomForm.value.cliPollIntervalSeconds || 15,
+      messageCategory: wecomForm.value.cliMessageCategory || 'msg',
+      messageMethod: wecomForm.value.cliMessageMethod || '',
+      roomAllowlist: splitComma(wecomForm.value.cliRoomAllowlist),
+      commandTemplate: wecomForm.value.cliCommandTemplate || "wecom-cli msg {method} '{jsonArgs}'"
+    }
   })
   const payload = {
     connectionCode: 'WECOM_DEFAULT',
@@ -644,5 +786,8 @@ onMounted(async () => {
   background: #f8fafc;
   border: 1px solid #e5eaf3;
   border-radius: 6px;
+}
+.config-alert {
+  margin-bottom: 12px;
 }
 </style>

@@ -163,7 +163,7 @@ const handleSave = async () => {
     formVisible.value = false
     loadData()
   } catch (e) {
-    ElMessage.error('保存失败')
+    console.error('保存字典项失败', e)
   }
 }
 

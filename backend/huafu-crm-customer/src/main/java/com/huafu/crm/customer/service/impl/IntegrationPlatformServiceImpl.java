@@ -60,6 +60,7 @@ import org.w3c.dom.NodeList;
 public class IntegrationPlatformServiceImpl implements IntegrationPlatformService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<List<Map<String, Object>>> TABLE_FIELD_LIST_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<Map<String, Object>>> LIST_MAP_TYPE = new TypeReference<>() {};
     private static final Set<String> SAP_PROTOCOLS = Set.of("SAP_RFC", "SAP_ODATA", "SAP_IDOC");
     private static final Set<String> GENERIC_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "WECOM", "SFTP", "FTP", "DATABASE", "KAFKA", "RABBITMQ", "CUSTOM");
     private static final Set<String> PARAMETER_MODES = Set.of("SINGLE", "TABLE");
@@ -585,6 +586,10 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
                 if (node.hasNonNull("msgtype")) {
                     return sourceBody;
                 }
+                Map<String, Object> officialBody = inferWeComMessage(node, auth);
+                if (!officialBody.isEmpty()) {
+                    return toJson(officialBody);
+                }
                 String content = node.hasNonNull("content") ? node.path("content").asText() : node.toString();
                 return toJson(defaultWeComMessage(content, auth));
             } catch (Exception ignored) {
@@ -592,6 +597,82 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
             }
         }
         return toJson(defaultWeComMessage(firstTextValue(auth, List.of("defaultContent", "content")), auth));
+    }
+
+    private Map<String, Object> inferWeComMessage(JsonNode node, Map<String, Object> auth) {
+        String msgType = firstTextValue(auth, List.of("defaultMsgType", "msgType"));
+        if (node.hasNonNull("msgType")) {
+            msgType = node.path("msgType").asText();
+        }
+        if (node.hasNonNull("messageType")) {
+            msgType = node.path("messageType").asText();
+        }
+        if (!StringUtils.hasText(msgType)) {
+            if (node.has("markdown")) msgType = "markdown";
+            else if (node.has("image")) msgType = "image";
+            else if (node.has("file")) msgType = "file";
+            else if (node.has("news") || node.has("articles")) msgType = "news";
+            else msgType = "text";
+        }
+        msgType = msgType.toLowerCase();
+        String content = node.hasNonNull("content") ? node.path("content").asText() : firstTextValue(auth, List.of("defaultContent", "content"));
+        if ("text".equals(msgType)) {
+            Map<String, Object> textAuth = new LinkedHashMap<>(auth);
+            textAuth.put("defaultMsgType", "text");
+            if (node.has("mentioned_list")) {
+                textAuth.put("mentionedList", node.get("mentioned_list"));
+            }
+            if (node.has("mentioned_mobile_list")) {
+                textAuth.put("mentionedMobileList", node.get("mentioned_mobile_list"));
+            }
+            return defaultWeComMessage(content, textAuth);
+        }
+        if ("markdown".equals(msgType)) {
+            String markdown = content;
+            if (!StringUtils.hasText(markdown) && node.path("markdown").hasNonNull("content")) {
+                markdown = node.path("markdown").path("content").asText();
+            }
+            return Map.of("msgtype", "markdown", "markdown", Map.of("content", StringUtils.hasText(markdown) ? markdown : "CRM通知"));
+        }
+        if ("image".equals(msgType)) {
+            String base64 = firstTextValue(node, List.of("base64", "imageBase64"));
+            String md5 = firstTextValue(node, List.of("md5", "imageMd5"));
+            if (!StringUtils.hasText(base64) && node.path("image").hasNonNull("base64")) {
+                base64 = node.path("image").path("base64").asText();
+            }
+            if (!StringUtils.hasText(md5) && node.path("image").hasNonNull("md5")) {
+                md5 = node.path("image").path("md5").asText();
+            }
+            if (StringUtils.hasText(base64) && StringUtils.hasText(md5)) {
+                return Map.of("msgtype", "image", "image", Map.of("base64", base64, "md5", md5));
+            }
+            return defaultWeComMessage("企微图片消息缺少 base64 或 md5，已转为文本提醒。", auth);
+        }
+        if ("file".equals(msgType)) {
+            String mediaId = firstTextValue(node, List.of("media_id", "mediaId"));
+            if (!StringUtils.hasText(mediaId) && node.path("file").hasNonNull("media_id")) {
+                mediaId = node.path("file").path("media_id").asText();
+            }
+            if (!StringUtils.hasText(mediaId) && node.path("file").hasNonNull("mediaId")) {
+                mediaId = node.path("file").path("mediaId").asText();
+            }
+            if (StringUtils.hasText(mediaId)) {
+                return Map.of("msgtype", "file", "file", Map.of("media_id", mediaId));
+            }
+            return defaultWeComMessage("企微文件消息缺少 media_id，已转为文本提醒。", auth);
+        }
+        if ("news".equals(msgType)) {
+            JsonNode articles = node.has("articles") ? node.path("articles") : node.path("news").path("articles");
+            if (articles.isArray() && !articles.isEmpty()) {
+                try {
+                    return Map.of("msgtype", "news", "news", Map.of("articles", OBJECT_MAPPER.convertValue(articles, LIST_MAP_TYPE)));
+                } catch (IllegalArgumentException ex) {
+                    return defaultWeComMessage("企微图文消息 articles 格式错误，已转为文本提醒。", auth);
+                }
+            }
+            return defaultWeComMessage("企微图文消息缺少 articles，已转为文本提醒。", auth);
+        }
+        return defaultWeComMessage(content, auth);
     }
 
     private Map<String, Object> defaultWeComMessage(String content, Map<String, Object> auth) {
@@ -636,12 +717,31 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         return null;
     }
 
+    private String firstTextValue(JsonNode source, List<String> keys) {
+        for (String key : keys) {
+            if (source.hasNonNull(key) && StringUtils.hasText(source.path(key).asText())) {
+                return source.path(key).asText();
+            }
+        }
+        return null;
+    }
+
     private List<String> stringList(Object value) {
         if (value == null) {
             return List.of();
         }
         if (value instanceof List<?> list) {
             return list.stream().map(String::valueOf).map(String::trim).filter(StringUtils::hasText).toList();
+        }
+        if (value instanceof JsonNode node && node.isArray()) {
+            List<String> result = new ArrayList<>();
+            node.forEach(item -> {
+                String text = item.asText();
+                if (StringUtils.hasText(text)) {
+                    result.add(text.trim());
+                }
+            });
+            return result;
         }
         return Arrays.stream(String.valueOf(value).split(","))
             .map(String::trim)

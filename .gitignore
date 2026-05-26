@@ -5,6 +5,7 @@ frontend/node_modules/
 
 # Runtime logs and local process files
 logs/
+backups/
 *.log
 *.pid
 

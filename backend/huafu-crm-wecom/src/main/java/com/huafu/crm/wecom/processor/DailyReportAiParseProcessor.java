@@ -4,11 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -16,7 +16,6 @@ public class DailyReportAiParseProcessor {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final RestClient aiRestClient;
-    private final RestClient opportunityRestClient;
 
     public DailyReportAiParseProcessor(JdbcTemplate jdbcTemplate,
                                        ObjectMapper objectMapper,
@@ -26,7 +25,6 @@ public class DailyReportAiParseProcessor {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.aiRestClient = restClientBuilder.baseUrl(aiBaseUrl).build();
-        this.opportunityRestClient = restClientBuilder.baseUrl(opportunityBaseUrl).build();
     }
 
     public void parse(Long dailyReportId) {
@@ -40,8 +38,8 @@ public class DailyReportAiParseProcessor {
         String rawContent = String.valueOf(report.get("content_text"));
         Long logId = insertAiLog(dailyReportId, rawContent);
         try {
-            DailyReportAiResult result = requestAiParse(rawContent);
-            String responseJson = objectMapper.writeValueAsString(result);
+            DailyReportAiResult result = requestAiParse(dailyReportId, rawContent);
+            String responseJson = result.parsedJson();
             jdbcTemplate.update("""
                     UPDATE crm_daily_report
                     SET parsed_json = ?::jsonb,
@@ -54,7 +52,6 @@ public class DailyReportAiParseProcessor {
                         updated_time = CURRENT_TIMESTAMP
                     WHERE id = ?
                     """, responseJson, result.opportunityCount(), result.marketIntelligenceCount(), result.lostOrderCount(), dailyReportId);
-            writeBusinessRows(rawContent, userId);
             jdbcTemplate.update("""
                     UPDATE crm_ai_parse_log
                     SET response_payload = ?, status = 'SUCCESS', updated_at = CURRENT_TIMESTAMP
@@ -78,57 +75,44 @@ public class DailyReportAiParseProcessor {
 
     private Long insertAiLog(Long reportId, String rawContent) {
         jdbcTemplate.update("""
-                INSERT INTO crm_ai_parse_log(source_type, source_id, request_payload, status)
-                VALUES ('DAILY_REPORT', ?, ?, 'PENDING')
-                """, reportId, rawContent);
+                INSERT INTO crm_ai_parse_log(source_type, source_id, provider, request_payload, status)
+                VALUES ('DAILY_REPORT', ?, ?, ?, 'PENDING')
+                """, reportId, configValue("ai.provider", "CONFIGURED_AI"), rawContent);
         return jdbcTemplate.queryForObject("SELECT currval(pg_get_serial_sequence('crm_ai_parse_log','id'))", Long.class);
     }
 
-    private DailyReportAiResult requestAiParse(String rawContent) throws JsonProcessingException {
+    private DailyReportAiResult requestAiParse(Long dailyReportId, String rawContent) throws JsonProcessingException {
         String response = aiRestClient.post()
                 .uri("/api/ai/parse/daily-report")
-                .body(rawContent == null ? "" : rawContent)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "text", rawContent == null ? "" : rawContent,
+                        "dailyReportId", dailyReportId
+                ))
                 .retrieve()
                 .body(String.class);
-        JsonNode data = objectMapper.readTree(response).path("data");
+        JsonNode root = objectMapper.readTree(response);
+        int code = root.path("code").asInt(200);
+        if (code != 200) {
+            throw new IllegalStateException(root.path("message").asText("AI服务返回失败"));
+        }
+        JsonNode data = root.path("data");
+        if (!data.isObject()) {
+            throw new IllegalStateException("AI服务没有返回解析数据");
+        }
+        JsonNode parsedJson = data.path("parsedJson");
+        String parsedJsonText = parsedJson.isObject()
+                ? objectMapper.writeValueAsString(parsedJson)
+                : objectMapper.writeValueAsString(Map.of(
+                        "opportunityCount", data.path("opportunityCount").asInt(),
+                        "marketIntelligenceCount", data.path("marketIntelligenceCount").asInt(),
+                        "lostOrderCount", data.path("lostOrderCount").asInt()
+                ));
         return new DailyReportAiResult(
                 data.path("opportunityCount").asInt(),
                 data.path("marketIntelligenceCount").asInt(),
-                data.path("lostOrderCount").asInt());
-    }
-
-    private void writeBusinessRows(String rawContent, String userId) {
-        Long handlerUserId = parseLongOrDefault(userId, 0L);
-        for (String line : lines(rawContent)) {
-            if (line.contains("商情")) {
-                postOpportunityDomain("/lead", Map.of(
-                        "leadType", 1,
-                        "source", 1,
-                        "creatorUserId", handlerUserId,
-                        "handlerUserId", handlerUserId,
-                        "remark", abbreviate(line, 480)));
-            }
-            if (line.contains("商机") || line.contains("机会")) {
-                postOpportunityDomain("/opportunity", Map.of(
-                        "opportunityName", abbreviate(line, 180),
-                        "customerId", 0L,
-                        "handlerUserId", handlerUserId,
-                        "stage", 1,
-                        "remark", rawContent == null ? "" : rawContent));
-            }
-            if (line.contains("丢单") || line.contains("流失")) {
-                postOpportunityDomain("/lost-order", Map.of(
-                        "opportunityId", 0L,
-                        "customerId", 0L,
-                        "lostType", 5,
-                        "reasonDetail", abbreviate(line, 480),
-                        "handlerUserId", handlerUserId));
-            }
-        }
-    }
-
-    private void postOpportunityDomain(String path, Map<String, Object> payload) {
-        opportunityRestClient.post().uri(path).body(payload).retrieve().toBodilessEntity();
+                data.path("lostOrderCount").asInt(),
+                parsedJsonText);
     }
 
     private void writeAckOutbox(String userId, Long reportId, DailyReportAiResult result, String rawContent) throws JsonProcessingException {
@@ -144,10 +128,6 @@ public class DailyReportAiParseProcessor {
                 """, userId, objectMapper.writeValueAsString(payload));
     }
 
-    private List<String> lines(String rawContent) {
-        return rawContent == null ? List.of() : rawContent.lines().map(String::trim).filter(s -> !s.isBlank()).toList();
-    }
-
     private String abbreviate(String value, int max) {
         if (value == null || value.length() <= max) {
             return value;
@@ -155,13 +135,17 @@ public class DailyReportAiParseProcessor {
         return value.substring(0, max);
     }
 
-    private Long parseLongOrDefault(String value, Long defaultValue) {
+    private String configValue(String key, String defaultValue) {
         try {
-            return Long.parseLong(value);
+            String value = jdbcTemplate.queryForObject(
+                    "SELECT config_value FROM sys_config WHERE config_key = ? AND deleted = 0 LIMIT 1",
+                    String.class,
+                    key);
+            return value == null || value.isBlank() ? defaultValue : value;
         } catch (Exception ignored) {
             return defaultValue;
         }
     }
 
-    private record DailyReportAiResult(int opportunityCount, int marketIntelligenceCount, int lostOrderCount) {}
+    private record DailyReportAiResult(int opportunityCount, int marketIntelligenceCount, int lostOrderCount, String parsedJson) {}
 }

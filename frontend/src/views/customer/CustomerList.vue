@@ -144,7 +144,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <el-tag v-if="row.level" :type="customerLevelType[row.level]">{{ customerLabel.level(row.level) }}</el-tag>
+              <DictTag v-if="hasValue(row.level)" dict-code="customer_level" :value="String(row.level)" size="small" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -155,7 +155,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <el-tag v-if="row.status" :type="customerStatusType[row.status]">{{ customerLabel.status(row.status) }}</el-tag>
+              <DictTag v-if="hasValue(row.status)" dict-code="customer_status" :value="String(row.status)" size="small" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -166,7 +166,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <span v-if="hasValue(row.businessType)">{{ customerLabel.businessType(row.businessType) }}</span>
+              <DictTag v-if="hasValue(row.businessType)" dict-code="biz_type" :value="String(row.businessType)" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -177,7 +177,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <span v-if="hasValue(row.type)">{{ customerLabel.type(row.type) }}</span>
+              <DictTag v-if="hasValue(row.type)" dict-code="customer_type" :value="String(row.type)" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -216,7 +216,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <span v-if="hasValue(row.customerCategory)">{{ customerLabel.category(row.customerCategory) }}</span>
+              <DictTag v-if="hasValue(row.customerCategory)" dict-code="customer_category" :value="String(row.customerCategory)" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -227,7 +227,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <span v-if="hasValue(row.customerSource)">{{ customerLabel.source(row.customerSource) }}</span>
+              <DictTag v-if="hasValue(row.customerSource)" dict-code="customer_source" :value="String(row.customerSource)" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -238,7 +238,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <span v-if="hasValue(row.mainCustomerGroup)">{{ customerLabel.group(row.mainCustomerGroup) }}</span>
+              <DictTag v-if="hasValue(row.mainCustomerGroup)" dict-code="customer_group" :value="String(row.mainCustomerGroup)" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -249,7 +249,7 @@
             :width="col.width"
           >
             <template #default="{ row }">
-              <span v-if="hasValue(row.customerStage)">{{ customerLabel.stage(row.customerStage) }}</span>
+              <DictTag v-if="hasValue(row.customerStage)" dict-code="customer_stage" :value="String(row.customerStage)" />
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -334,7 +334,7 @@ import { useColumnConfig } from '@/composables/useColumnConfig.js'
 import { useFilterPreset } from '@/composables/useFilterPreset.js'
 import { ElMessage } from 'element-plus'
 import { useDict } from '@/composables/useDict'
-import { buildCustomerUpdatePayload, customerLabel, customerLevelType, customerStatusType } from '@/utils/customerFields'
+import { buildCustomerUpdatePayload } from '@/utils/customerFields'
 
 const activeTab = ref('all')
 const loading = ref(false)
@@ -345,7 +345,7 @@ const { loadDictItems } = useDict()
 const initialQuery = () => ({
   current: 1, size: 20,
   customerName: '', level: null, type: null, businessType: null, status: null, ownerName: '',
-  customerCategory: null, customerSource: null, customerStage: null, riskLevel: null, salesMerchandiser: ''
+  customerCategory: null, customerSource: null, mainCustomerGroup: null, customerStage: null, riskLevel: null, salesMerchandiser: ''
 })
 const query = ref(initialQuery())
 const filterFields = [
@@ -355,8 +355,9 @@ const filterFields = [
   { key: 'type', label: '客户类型', type: 'dict', dictCode: 'customer_type', valueType: 'number', placement: 'more' },
   { key: 'businessType', label: '业务类型', type: 'dict', dictCode: 'biz_type', valueType: 'number', placement: 'more' },
   { key: 'ownerName', label: '负责人', placement: 'more', width: 140 },
-  { key: 'customerCategory', label: '客户分类', type: 'dict', dictCode: 'customer_category', valueType: 'number', placement: 'more' },
-  { key: 'customerSource', label: '客户来源', type: 'dict', dictCode: 'customer_source', valueType: 'number', placement: 'more' },
+  { key: 'customerCategory', label: '客户分类', type: 'dict', dictCode: 'customer_category', placement: 'more' },
+  { key: 'customerSource', label: '客户来源', type: 'dict', dictCode: 'customer_source', placement: 'more' },
+  { key: 'mainCustomerGroup', label: '主要客户群体', type: 'dict', dictCode: 'customer_group', placement: 'hidden' },
   { key: 'customerStage', label: '客户阶段', type: 'dict', dictCode: 'customer_stage', valueType: 'number', placement: 'more' },
   { key: 'riskLevel', label: '风险等级', type: 'dict', dictCode: 'risk_level', valueType: 'number', placement: 'hidden' },
   { key: 'salesMerchandiser', label: '销售跟单', placement: 'hidden' }
@@ -371,8 +372,9 @@ const batchFields = [
   { key: 'level', label: '客户等级', dictCode: 'customer_level', valueType: 'number' },
   { key: 'type', label: '客户类型', dictCode: 'customer_type', valueType: 'number' },
   { key: 'businessType', label: '业务类型', dictCode: 'biz_type', valueType: 'number' },
-  { key: 'customerCategory', label: '客户分类', dictCode: 'customer_category', valueType: 'number' },
-  { key: 'customerSource', label: '客户来源', dictCode: 'customer_source', valueType: 'number' },
+  { key: 'customerCategory', label: '客户分类', dictCode: 'customer_category' },
+  { key: 'customerSource', label: '客户来源', dictCode: 'customer_source' },
+  { key: 'mainCustomerGroup', label: '主要客户群体', dictCode: 'customer_group' },
   { key: 'customerStage', label: '客户阶段', dictCode: 'customer_stage', valueType: 'number' },
   { key: 'riskLevel', label: '风险等级', dictCode: 'risk_level', valueType: 'number' },
   { key: 'salesMerchandiser', label: '销售跟单' },
@@ -381,10 +383,12 @@ const batchFields = [
 const importFields = [
   { key: 'customerName', label: '客户名称', required: true, example: '浙江云泰纺织有限公司' },
   { key: 'customerShortName', label: '客户简称', required: true, example: '云泰纺织' },
-  { key: 'type', label: '客户类型', required: true, type: 'number', valueMap: { 直接客户: 1, 代理: 2, 终端品牌: 3 }, example: '直接客户' },
-  { key: 'status', label: '客户状态', type: 'number', valueMap: { 潜在客户: 1, 活跃客户: 2, 非活跃: 3, 流失: 4, 新客户: 5, 重点客户: 6 }, example: '潜在客户' },
-  { key: 'businessType', label: '业务类型', required: true, type: 'number', valueMap: { 内销: 1, 外销: 2, 转口: 3 }, example: '内销' },
-  { key: 'category', label: '客户分类', type: 'number', valueMap: { 纱线厂: 1, 面料厂: 2, 服装厂: 3, 贸易商: 4 }, example: '纱线厂' },
+  { key: 'type', label: '客户类型', required: true, type: 'number', valueMap: { 实体: 1, 贸易: 2 }, example: '实体' },
+  { key: 'status', label: '客户状态', type: 'number', valueMap: { 潜在客户: 1, 正式客户: 2 }, example: '潜在客户' },
+  { key: 'businessType', label: '业务类型', required: true, type: 'number', valueMap: { 直接客户: 1, 品牌客户: 2, 代理客户: 3 }, example: '直接客户' },
+  { key: 'category', label: '客户分类', valueMap: { 终端品牌: '0001', 代理商: '0002', 制衣厂: '0003', 其他: '0004', 毛衫厂: '0005', '贸易商（布）': '0006', 布厂: '0007', '贸易商（纱线）': '0008', 中大布行: '0009', 中山布行: '0010', 潮汕布行: '0011', 广佛布行: '0012', 东莞布行: '0013' }, example: '终端品牌' },
+  { key: 'source', label: '客户来源', valueMap: { 展会: '1', 转介绍: '2', 自主开发: '3', 平台: '4', 平台获客: '4' }, example: '展会' },
+  { key: 'customerGroup', label: '主要客户群体', valueMap: { 外销: '1', 内销流通: '2', 电商: '3' }, example: '外销' },
   { key: 'province', label: '省份', example: '浙江省' },
   { key: 'city', label: '城市', example: '杭州市' },
   { key: 'district', label: '区县', example: '萧山区' },
@@ -429,6 +433,7 @@ const currentFilters = computed(() => ({
   ownerName: query.value.ownerName,
   customerCategory: query.value.customerCategory,
   customerSource: query.value.customerSource,
+  mainCustomerGroup: query.value.mainCustomerGroup,
   customerStage: query.value.customerStage,
   riskLevel: query.value.riskLevel,
   salesMerchandiser: query.value.salesMerchandiser,

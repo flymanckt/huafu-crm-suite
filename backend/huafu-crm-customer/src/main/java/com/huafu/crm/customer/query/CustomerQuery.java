@@ -8,7 +8,14 @@ public record CustomerQuery(
     Integer type,
     Integer level,
     Integer status,
-    Long ownerUserId
+    Long ownerUserId,
+    Integer businessType,
+    String customerCategory,
+    String customerSource,
+    String mainCustomerGroup,
+    Integer customerStage,
+    Integer riskLevel,
+    String salesMerchandiser
 ) {
     public CustomerQuery {
         if (current == null) current = 1;

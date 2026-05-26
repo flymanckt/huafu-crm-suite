@@ -12,8 +12,8 @@
               <div class="enterprise-name">{{ item.customerName }}</div>
               <div class="enterprise-meta">
                 <span>编码：{{ item.customerCode }}</span>
-                <el-tag size="small" :type="customerLevelType[item.level]">{{ customerLabel.level(item.level) }}</el-tag>
-                <el-tag size="small" :type="customerStatusType[item.status]">{{ customerLabel.status(item.status) }}</el-tag>
+                <DictTag v-if="hasValue(item.level)" dict-code="customer_level" :value="String(item.level)" size="small" />
+                <DictTag v-if="hasValue(item.status)" dict-code="customer_status" :value="String(item.status)" size="small" />
               </div>
             </div>
           </div>
@@ -30,7 +30,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { OfficeBuilding, ArrowRight } from '@element-plus/icons-vue'
 import { getRelatedEnterpriseListV1 } from '@/api/customer'
-import { customerLabel, customerLevelType, customerStatusType } from '@/utils/customerFields'
+import DictTag from '@/components/Dict/DictTag.vue'
 
 const props = defineProps({
   customerId: { type: [String, Number], required: true }
@@ -38,6 +38,7 @@ const props = defineProps({
 
 const router = useRouter()
 const relatedList = ref([])
+const hasValue = (value) => value !== null && value !== undefined && value !== ''
 
 const loadData = async () => {
   if (!props.customerId) return

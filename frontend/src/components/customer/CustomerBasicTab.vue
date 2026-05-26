@@ -11,14 +11,14 @@
         <div class="summary-header">
           <div class="summary-title">
             <span class="customer-name">{{ detail.customerName || '-' }}</span>
-            <el-tag size="small" :type="customerStatusType[detail.status]" style="margin-left:8px">{{ customerLabel.status(detail.status) }}</el-tag>
+            <DictTag v-if="hasValue(detail.status)" dict-code="customer_status" :value="String(detail.status)" size="small" style="margin-left:8px" />
           </div>
           <div class="summary-meta">
             <span class="meta-item">编码：{{ detail.customerCode || '-' }}</span>
             <span class="meta-divider">|</span>
-            <span class="meta-item">{{ customerLabel.type(detail.type) }}</span>
+            <span class="meta-item"><DictTag v-if="hasValue(detail.type)" dict-code="customer_type" :value="String(detail.type)" size="small" /><template v-else>-</template></span>
             <span class="meta-divider">|</span>
-            <span class="meta-item">{{ customerLabel.level(detail.level) }}</span>
+            <span class="meta-item"><DictTag v-if="hasValue(detail.level)" dict-code="customer_level" :value="String(detail.level)" size="small" /><template v-else>-</template></span>
             <span class="meta-divider" v-if="detail.customerShortName">|</span>
             <span class="meta-item" v-if="detail.customerShortName">简称：{{ detail.customerShortName }}</span>
           </div>
@@ -40,7 +40,7 @@
             <el-col :span="12"><div class="field-item"><label>机台数</label><value>{{ detail.machineCount ?? '-' }}</value></div></el-col>
             <el-col :span="12"><div class="field-item"><label>产能情况</label><value>{{ detail.productionCapacity || '-' }}</value></div></el-col>
             <el-col :span="12"><div class="field-item"><label>行业地位</label><value>{{ detail.industryPosition || '-' }}</value></div></el-col>
-            <el-col :span="12"><div class="field-item"><label>主要客户群体</label><value>{{ detail.mainCustomerGroup || '-' }}</value></div></el-col>
+            <el-col :span="12"><div class="field-item"><label>主要客户群体</label><value><DictTag v-if="hasValue(detail.mainCustomerGroup)" dict-code="customer_group" :value="String(detail.mainCustomerGroup)" size="small" /><template v-else>-</template></value></div></el-col>
             <el-col :span="12"><div class="field-item"><label>国家区域</label><value>{{ detail.countryRegion || '-' }}</value></div></el-col>
             <el-col :span="12"><div class="field-item"><label>主要竞争对手</label><value>{{ detail.competitorShareJson || '-' }}</value></div></el-col>
           </el-row>
@@ -85,7 +85,7 @@
             <el-col :span="8"><div class="field-item"><label>账期(天)</label><value>{{ detail.paymentDays ?? '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>信用额度(万元)</label><value>{{ detail.creditLimit ?? '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>年营业额(万元)</label><value>{{ detail.annualRevenue ?? '-' }}</value></div></el-col>
-            <el-col :span="8"><div class="field-item"><label>风险等级</label><value>{{ riskLevelMap[detail.riskLevel] || '-' }}</value></div></el-col>
+            <el-col :span="8"><div class="field-item"><label>风险等级</label><value><DictTag v-if="hasValue(detail.riskLevel)" dict-code="risk_level" :value="String(detail.riskLevel)" size="small" /><template v-else>-</template></value></div></el-col>
           </el-row>
         </div>
       </el-card>
@@ -109,7 +109,7 @@
             <el-col :span="8"><div class="field-item"><label>售达方</label><value>{{ detail.soldToParty || '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>付款方</label><value>{{ detail.payerParty || '-' }}</value></div></el-col>
             <el-col :span="8"><div class="field-item"><label>统一社会信用代码</label><value>{{ detail.unifiedSocialCreditCode || '-' }}</value></div></el-col>
-            <el-col :span="8"><div class="field-item"><label>资产类型</label><value>{{ detail.assetType || '-' }}</value></div></el-col>
+            <el-col :span="8"><div class="field-item"><label>资产类型</label><value><DictTag v-if="hasValue(detail.assetType)" dict-code="asset_type" :value="String(detail.assetType)" size="small" /><template v-else>-</template></value></div></el-col>
           </el-row>
         </div>
       </el-card>
@@ -166,7 +166,8 @@ import { ref, reactive } from 'vue'
 import { ArrowUp } from '@element-plus/icons-vue'
 import { updateCustomer } from '@/api/customer'
 import { ElMessage } from 'element-plus'
-import { buildCustomerUpdatePayload, customerLabel, customerStatusType } from '@/utils/customerFields'
+import DictTag from '@/components/Dict/DictTag.vue'
+import { buildCustomerUpdatePayload } from '@/utils/customerFields'
 
 const props = defineProps({ customerId: Number, detail: Object })
 const emit = defineEmits(['updated'])
@@ -174,6 +175,7 @@ const loading = ref(false)
 const editMode = ref(false)
 const saving = ref(false)
 const editForm = ref({})
+const hasValue = (value) => value !== null && value !== undefined && value !== ''
 
 // 折叠状态：默认全部展开（collapse.x = false 表示展开）
 const collapse = reactive({ business: false, ownership: false, finance: false, sap: false })
@@ -243,7 +245,6 @@ const handleSave = async () => {
   }
 }
 
-const riskLevelMap = { 1: '低', 2: '中', 3: '高' }
 </script>
 
 <style scoped>

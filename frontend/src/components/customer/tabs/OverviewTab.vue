@@ -78,10 +78,11 @@
               <el-input v-if="overviewEditing" v-model="overviewForm.strategyPosition" size="small" maxlength="120" />
               <el-tag v-else size="small">{{ overview.strategyPosition || detail.strategicLevel || '未设置' }}</el-tag>
             </div>
-            <div class="info-item">
-              <span class="info-label">客户来源：</span>
-              <span>{{ customerLabel.source(detail.customerSource ?? detail.source) }}</span>
-            </div>
+	            <div class="info-item">
+	              <span class="info-label">客户来源：</span>
+	              <DictTag v-if="hasValue(detail.customerSource ?? detail.source)" dict-code="customer_source" :value="String(detail.customerSource ?? detail.source)" size="small" />
+	              <span v-else>-</span>
+	            </div>
             <div class="info-item">
               <span class="info-label">最近跟进：</span>
               <span>{{ detail.lastFollowUpDate || '未跟进' }}</span>
@@ -100,7 +101,7 @@
       <el-form v-if="overviewEditing" :model="overviewForm" label-width="150px" class="profile-edit-form">
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="行业地位"><el-input v-model="overviewForm.industryPosition" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="主要客户群体"><DictSelect v-model="overviewForm.mainCustomerGroup" dict-code="customer_group" value-type="number" clearable /></el-form-item></el-col>
+	          <el-col :span="12"><el-form-item label="主要客户群体"><DictSelect v-model="overviewForm.mainCustomerGroup" dict-code="customer_group" clearable /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="主要合作品牌"><el-input v-model="overviewForm.cooperationBrandJson" type="textarea" :rows="2" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="竞争对手及占比"><el-input v-model="overviewForm.competitorShareJson" type="textarea" :rows="2" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="其他资产/信息"><el-input v-model="overviewForm.otherInfo" type="textarea" :rows="2" /></el-form-item></el-col>
@@ -108,7 +109,7 @@
       </el-form>
       <el-descriptions v-else :column="2" border>
         <el-descriptions-item label="行业地位">{{ detail.industryPosition || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="主要客户群体">{{ customerLabel.group(detail.mainCustomerGroup || detail.customerGroup) }}</el-descriptions-item>
+	        <el-descriptions-item label="主要客户群体"><DictTag v-if="hasValue(detail.mainCustomerGroup || detail.customerGroup)" dict-code="customer_group" :value="String(detail.mainCustomerGroup || detail.customerGroup)" size="small" /><span v-else>-</span></el-descriptions-item>
         <el-descriptions-item label="主要合作品牌">{{ formatJsonText(detail.cooperationBrandJson) || detail.mainBrand || '-' }}</el-descriptions-item>
         <el-descriptions-item label="主要合作竞争对手及占比情况">{{ formatJsonText(detail.competitorShareJson) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="其他资产或其他信息">{{ [detail.assetType, detail.remark].filter(Boolean).join('；') || '-' }}</el-descriptions-item>
@@ -141,8 +142,10 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { getContactListV1, getCustomerOverviewV1, updateCustomer, updateCustomerOverviewV1 } from '@/api/customer'
-import { buildCustomerUpdatePayload, customerGroupCodes, customerLabel } from '@/utils/customerFields'
+import { buildCustomerUpdatePayload } from '@/utils/customerFields'
 import DictSelect from '@/components/Dict/DictSelect.vue'
+import DictTag from '@/components/Dict/DictTag.vue'
+import { useDict } from '@/composables/useDict'
 
 const props = defineProps({
   customerId: { type: [String, Number], required: true },
@@ -167,6 +170,8 @@ const overviewForm = ref({
 })
 const overviewEditing = ref(false)
 const overviewSaving = ref(false)
+const { loadDictItems, getDictLabel } = useDict()
+const hasValue = (value) => value !== null && value !== undefined && value !== ''
 
 const formatAmount = (val) => {
   if (!val && val !== 0) return '-'
@@ -198,17 +203,17 @@ const formatJsonText = (value) => {
 const generatedSummary = computed(() => {
   const d = props.detail || {}
   const area = [d.country, d.province, d.city, d.district].filter(Boolean).join('')
-  const fragments = [
-    `${d.customerName || '该客户'}当前为${customerLabel.type(d.type)}，客户状态为${customerLabel.status(d.status)}，等级为${customerLabel.level(d.level)}`,
-    area ? `客户位于${area}` : '',
-    d.industryPosition ? `行业定位为${d.industryPosition}` : '',
-    d.mainCustomerGroup ? `主要客户群体为${customerLabel.group(d.mainCustomerGroup)}` : '',
+	  const fragments = [
+	    `${d.customerName || '该客户'}当前为${dictLabel('customer_type', d.type)}，客户状态为${dictLabel('customer_status', d.status)}，等级为${dictLabel('customer_level', d.level)}`,
+	    area ? `客户位于${area}` : '',
+	    d.industryPosition ? `行业定位为${d.industryPosition}` : '',
+	    d.mainCustomerGroup ? `主要客户群体为${dictLabel('customer_group', d.mainCustomerGroup)}` : '',
     d.mainBrand ? `主要合作品牌为${d.mainBrand}` : '',
     d.cooperationBrandJson ? `合作品牌明细为${formatJsonText(d.cooperationBrandJson)}` : '',
     d.competitorShareJson ? `主要竞争对手及占比为${formatJsonText(d.competitorShareJson)}` : '',
     d.assetType || d.remark ? `其他资产或信息为${[d.assetType, d.remark].filter(Boolean).join('、')}` : '',
-    d.businessType ? `业务类型为${d.businessType}` : '',
-    d.category ? `客户分类为${d.category}` : '',
+	    d.businessType ? `业务类型为${dictLabel('biz_type', d.businessType)}` : '',
+	    (d.customerCategory || d.category) ? `客户分类为${dictLabel('customer_category', d.customerCategory || d.category)}` : '',
     fieldText('机台数', d.machineCount),
     fieldText('年度销售额', d.annualRevenue),
     fieldText('年纱线用量', d.annualYarnVolume || d.yarnUsage)
@@ -232,7 +237,7 @@ const startOverviewEdit = () => {
     overviewSummary: displaySummary.value,
     strategyPosition: overview.value.strategyPosition || props.detail.strategicLevel || '',
     industryPosition: props.detail.industryPosition || '',
-    mainCustomerGroup: normalizeCustomerGroup(props.detail.mainCustomerGroup || props.detail.customerGroup),
+    mainCustomerGroup: props.detail.mainCustomerGroup || props.detail.customerGroup || null,
     cooperationBrandJson: props.detail.cooperationBrandJson || props.detail.mainBrand || '',
     competitorShareJson: props.detail.competitorShareJson || '',
     otherInfo: props.detail.remark || ''
@@ -248,12 +253,7 @@ const cancelOverviewEdit = () => {
   overviewEditing.value = false
 }
 
-const normalizeCustomerGroup = (value) => {
-  if (value === null || value === undefined || value === '') return null
-  if (typeof value === 'number') return value
-  if (/^-?\d+$/.test(String(value))) return Number(value)
-  return customerGroupCodes[value] ?? value
-}
+const dictLabel = (code, value) => hasValue(value) ? getDictLabel(code, String(value)) : '-'
 
 const saveOverview = async () => {
   overviewSaving.value = true
@@ -312,6 +312,7 @@ const loadStats = async () => {
 }
 
 onMounted(() => {
+  loadDictItems(['customer_type', 'customer_status', 'customer_level', 'customer_group', 'biz_type', 'customer_category', 'customer_source'])
   loadOverview()
   loadStats()
   loadChartData()

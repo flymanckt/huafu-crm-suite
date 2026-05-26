@@ -21,7 +21,12 @@ public class AiParseController {
 
     @PostMapping({"/daily-report", "/parse-daily-report"})
     public Result<DailyReportAiResult> parseDailyReport(@RequestBody Object body) {
-        return Result.ok(aiClient.parseDailyReport(extractText(body)));
+        String text = extractText(body);
+        Long dailyReportId = extractDailyReportId(body);
+        if (dailyReportId == null) {
+            return Result.ok(aiClient.parseDailyReport(text));
+        }
+        return Result.ok(aiClient.parseDailyReport(text, dailyReportId));
     }
 
     private String extractText(Object body) {
@@ -30,5 +35,24 @@ public class AiParseController {
         Map<?, ?> map = objectMapper.convertValue(body, Map.class);
         Object text = map.get("text");
         return text == null ? "" : String.valueOf(text);
+    }
+
+    private Long extractDailyReportId(Object body) {
+        if (!(body instanceof Map<?, ?>)) {
+            try {
+                body = objectMapper.convertValue(body, Map.class);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        Object value = ((Map<?, ?>) body).get("dailyReportId");
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

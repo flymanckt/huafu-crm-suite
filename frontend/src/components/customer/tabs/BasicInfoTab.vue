@@ -17,13 +17,13 @@
         <el-descriptions-item label="客户名称简称">{{ formData.customerShortName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户编码">{{ formData.customerCode || '-' }}</el-descriptions-item>
         <el-descriptions-item label="SAP客户编号">{{ formData.sapCustomerCode || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="客户类型">{{ customerLabel.type(formData.type) }}</el-descriptions-item>
-        <el-descriptions-item label="客户状态"><el-tag :type="customerStatusType[formData.status]">{{ customerLabel.status(formData.status) }}</el-tag></el-descriptions-item>
-        <el-descriptions-item label="客户等级">{{ customerLabel.level(formData.level) }}</el-descriptions-item>
-        <el-descriptions-item label="客户阶段">{{ customerLabel.stage(formData.customerStage) }}</el-descriptions-item>
+        <el-descriptions-item label="客户类型"><DictTag v-if="hasValue(formData.type)" dict-code="customer_type" :value="String(formData.type)" size="small" /><span v-else>-</span></el-descriptions-item>
+        <el-descriptions-item label="客户状态"><DictTag v-if="hasValue(formData.status)" dict-code="customer_status" :value="String(formData.status)" size="small" /><span v-else>-</span></el-descriptions-item>
+        <el-descriptions-item label="客户等级"><DictTag v-if="hasValue(formData.level)" dict-code="customer_level" :value="String(formData.level)" size="small" /><span v-else>-</span></el-descriptions-item>
+        <el-descriptions-item label="客户阶段"><DictTag v-if="hasValue(formData.customerStage)" dict-code="customer_stage" :value="String(formData.customerStage)" size="small" /><span v-else>-</span></el-descriptions-item>
         <el-descriptions-item label="英文名称">{{ formData.englishName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="统一社会信用代码">{{ formData.unifiedSocialCreditCode || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="风险等级"><el-tag :type="riskLevelTagType[formData.riskLevel]">{{ customerLabel.riskLevel(formData.riskLevel) }}</el-tag></el-descriptions-item>
+        <el-descriptions-item label="风险等级"><DictTag v-if="hasValue(formData.riskLevel)" dict-code="risk_level" :value="String(formData.riskLevel)" size="small" /><span v-else>-</span></el-descriptions-item>
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
@@ -46,11 +46,11 @@
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>业务信息</span></template>
       <el-descriptions :column="detailColumns" border v-if="!isEditing">
-        <el-descriptions-item label="业务类型">{{ customerLabel.businessType(formData.businessType) }}</el-descriptions-item>
-        <el-descriptions-item label="客户分类">{{ customerLabel.category(formData.category) }}</el-descriptions-item>
-        <el-descriptions-item label="客户来源">{{ customerLabel.source(formData.source) }}</el-descriptions-item>
+        <el-descriptions-item label="业务类型"><DictTag v-if="hasValue(formData.businessType)" dict-code="biz_type" :value="String(formData.businessType)" size="small" /><span v-else>-</span></el-descriptions-item>
+        <el-descriptions-item label="客户分类"><DictTag v-if="hasValue(formData.category)" dict-code="customer_category" :value="String(formData.category)" size="small" /><span v-else>-</span></el-descriptions-item>
+        <el-descriptions-item label="客户来源"><DictTag v-if="hasValue(formData.source)" dict-code="customer_source" :value="String(formData.source)" size="small" /><span v-else>-</span></el-descriptions-item>
         <el-descriptions-item label="行业地位">{{ formData.industryPosition || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="主要客户群体">{{ customerLabel.group(formData.customerGroup) }}</el-descriptions-item>
+        <el-descriptions-item label="主要客户群体"><DictTag v-if="hasValue(formData.customerGroup)" dict-code="customer_group" :value="String(formData.customerGroup)" size="small" /><span v-else>-</span></el-descriptions-item>
         <el-descriptions-item label="机台数">{{ formData.machineCount || '-' }}</el-descriptions-item>
         <el-descriptions-item label="产能情况">{{ formData.capacityInfo || '-' }}</el-descriptions-item>
         <el-descriptions-item label="年营业额">{{ formData.annualRevenue ? formData.annualRevenue + '万元' : '-' }}</el-descriptions-item>
@@ -61,10 +61,10 @@
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
           <el-col :span="formColSpan"><el-form-item label="业务类型" prop="businessType"><DictSelect v-model="formData.businessType" dict-code="biz_type" value-type="number" /></el-form-item></el-col>
-          <el-col :span="formColSpan"><el-form-item label="客户分类"><DictSelect v-model="formData.category" dict-code="customer_category" value-type="number" /></el-form-item></el-col>
-          <el-col :span="formColSpan"><el-form-item label="客户来源"><DictSelect v-model="formData.source" dict-code="customer_source" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户分类"><DictSelect v-model="formData.category" dict-code="customer_category" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="客户来源"><DictSelect v-model="formData.source" dict-code="customer_source" clearable /></el-form-item></el-col>
           <el-col :span="formColSpan"><el-form-item label="行业地位"><el-input v-model="formData.industryPosition" /></el-form-item></el-col>
-          <el-col :span="formColSpan"><el-form-item label="主要客户群体"><DictSelect v-model="formData.customerGroup" dict-code="customer_group" value-type="number" clearable /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="主要客户群体"><DictSelect v-model="formData.customerGroup" dict-code="customer_group" clearable /></el-form-item></el-col>
           <el-col :span="formColSpan"><el-form-item label="机台数"><el-input-number v-model="formData.machineCount" :min="0" /></el-form-item></el-col>
           <el-col :span="formColSpan"><el-form-item label="产能情况"><el-input v-model="formData.capacityInfo" /></el-form-item></el-col>
           <el-col :span="formColSpan"><el-form-item label="年营业额"><el-input-number v-model="formData.annualRevenue" :min="0" :precision="2" /></el-form-item></el-col>
@@ -92,14 +92,17 @@
                 :data="deptTree"
                 :props="{ label: 'deptName', value: 'id', children: 'children' }"
                 check-strictly
+                filterable
+                default-expand-all
                 clearable
+                placeholder="请选择最末级归属部门"
                 style="width:100%"
               />
             </el-form-item>
           </el-col>
           <el-col :span="formColSpan">
             <el-form-item label="负责人">
-              <el-select v-model="formData.ownerUserId" clearable filterable style="width:100%">
+              <el-select v-model="formData.ownerUserId" clearable filterable style="width:100%" @change="handleOwnerUserChange">
                 <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
               </el-select>
             </el-form-item>
@@ -186,7 +189,7 @@
     <el-card shadow="never" style="margin-bottom:16px">
       <template #header><span>财务信息</span></template>
       <el-descriptions :column="detailColumns" border v-if="!isEditing">
-        <el-descriptions-item label="资产类型">{{ formData.assetType || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="资产类型"><DictTag v-if="hasValue(formData.assetType)" dict-code="asset_type" :value="String(formData.assetType)" size="small" /><span v-else>-</span></el-descriptions-item>
         <el-descriptions-item label="税号">{{ formData.taxId || '-' }}</el-descriptions-item>
         <el-descriptions-item label="开户行">{{ formData.bankName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="银行账号">{{ formData.bankAccount || '-' }}</el-descriptions-item>
@@ -194,7 +197,7 @@
       </el-descriptions>
       <el-form v-else :model="formData" label-width="100px" class="edit-form">
         <el-row :gutter="16">
-          <el-col :span="formColSpan"><el-form-item label="资产类型"><el-input v-model="formData.assetType" /></el-form-item></el-col>
+          <el-col :span="formColSpan"><el-form-item label="资产类型"><DictSelect v-model="formData.assetType" dict-code="asset_type" clearable /></el-form-item></el-col>
           <el-col :span="formColSpan"><el-form-item label="税号"><el-input v-model="formData.taxId" /></el-form-item></el-col>
           <el-col :span="formColSpan"><el-form-item label="开户行"><el-input v-model="formData.bankName" /></el-form-item></el-col>
           <el-col :span="formColSpan"><el-form-item label="银行账号"><el-input v-model="formData.bankAccount" /></el-form-item></el-col>
@@ -218,11 +221,10 @@ import { getDeptTree, getUserPage } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AddressPicker from '@/components/common/AddressPicker.vue'
 import DictSelect from '@/components/Dict/DictSelect.vue'
+import DictTag from '@/components/Dict/DictTag.vue'
 import { geocodeAddress } from '@/utils/amap'
 import {
   buildCustomerUpdatePayload,
-  customerLabel,
-  customerStatusType,
   normalizeCustomerForForm
 } from '@/utils/customerFields'
 
@@ -245,9 +247,8 @@ const formData = ref({})
 const deptTree = ref([])
 const userOptions = ref([])
 
-const riskLevelTagType = { 1: 'success', 2: 'warning', 3: 'danger' }
-
 const flattenDepts = (nodes = []) => nodes.flatMap(node => [node, ...flattenDepts(node.children || [])])
+const hasValue = (value) => value !== null && value !== undefined && value !== ''
 
 const resolveDeptName = (id) => {
   if (!id) return '-'
@@ -258,6 +259,11 @@ const resolveUserName = (id) => {
   if (!id) return '-'
   const user = userOptions.value.find(item => String(item.id) === String(id))
   return user?.realName || user?.username || id
+}
+
+const handleOwnerUserChange = (id) => {
+  const user = userOptions.value.find(item => String(item.id) === String(id))
+  formData.value.ownerDeptId = user?.deptId || null
 }
 
 const formatBundleCustomerLabel = (customer) => {
@@ -317,10 +323,10 @@ const clearBundleCustomer = () => {
 
 const loadOptions = async () => {
   try {
-    const [depts, users] = await Promise.all([
-      getDeptTree(),
-      getUserPage({ pageNum: 1, pageSize: 200 })
-    ])
+	    const [depts, users] = await Promise.all([
+	      getDeptTree(),
+	      getUserPage({ current: 1, size: 500 })
+	    ])
     deptTree.value = depts || []
     userOptions.value = users?.records || users?.list || users || []
     addBundleOption(defaultBundleCustomer(props.detail))

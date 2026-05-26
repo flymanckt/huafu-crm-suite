@@ -24,13 +24,13 @@
     <DictSelect v-model="form.businessType" dict-code="biz_type" value-type="number" placeholder="请选择" clearable />
   </el-form-item>
   <el-form-item label="客户分类">
-    <DictSelect v-model="form.category" dict-code="customer_category" value-type="number" placeholder="请选择" clearable />
+    <DictSelect v-model="form.category" dict-code="customer_category" placeholder="请选择" clearable />
   </el-form-item>
   <el-form-item label="客户来源">
-    <DictSelect v-model="form.source" dict-code="customer_source" value-type="number" placeholder="请选择" clearable />
+    <DictSelect v-model="form.source" dict-code="customer_source" placeholder="请选择" clearable />
   </el-form-item>
   <el-form-item label="主要客户群体">
-    <DictSelect v-model="form.customerGroup" dict-code="customer_group" value-type="number" placeholder="请选择" clearable />
+    <DictSelect v-model="form.customerGroup" dict-code="customer_group" placeholder="请选择" clearable />
   </el-form-item>
   <el-form-item label="客户细分组"><el-input v-model="form.customerSegment" placeholder="请输入客户细分组" /></el-form-item>
   <el-form-item label="国家区域"><el-input v-model="form.countryRegion" placeholder="请输入国家区域" /></el-form-item>
@@ -41,7 +41,7 @@
   <el-form-item label="行业地位"><el-input v-model="form.industryPosition" placeholder="请输入行业地位" /></el-form-item>
   <el-form-item label="业务员"><el-input v-model="form.salesName" placeholder="请输入业务员姓名" /></el-form-item>
   <el-form-item label="资产类型">
-    <DictSelect v-model="form.assetType" dict-code="asset_type" value-type="number" placeholder="请选择" clearable />
+    <DictSelect v-model="form.assetType" dict-code="asset_type" placeholder="请选择" clearable />
   </el-form-item>
   <el-form-item label="风险等级">
     <DictSelect v-model="form.riskLevel" dict-code="risk_level" value-type="number" placeholder="请选择" clearable />

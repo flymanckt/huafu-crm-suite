@@ -23,7 +23,7 @@ huafu-crm-suite/
 - 自定义列、自定义筛选、个人变式、批量选择、批量修改等列表通用能力。
 - AI 服务配置、AI 日报解析、主数据匹配和结构化写入基础能力。
 - 集成平台：支持通用连接配置、SAP RFC 配置、SAP/通用接口定义、结构化字段映射、平台日志和异常数据重新推送。
-- 企业微信：支持群机器人 Webhook 推送、回调接收、消息日志、关键词触发日报写入和 AI 日报解析链路。
+- 企业微信：支持群机器人 Webhook 推送、智能机器人官方 WebSocket 长连接接收、消息日志、关键词触发日报写入和 AI 日报解析链路。
 
 集成平台当前支持的连接/接口类型包括：
 
@@ -127,10 +127,21 @@ SKIP_BUILD=1 ./scripts/deploy-local.sh
 
 系统管理的外围系统配置中提供企微快速配置：
 
-- 群机器人发送：维护群机器人 Webhook、robot key、默认 @ 人、默认消息类型和默认内容。
-- 消息接收写入 CRM：维护回调入口、接收开关、写入模式、关键词、Token 和 EncodingAESKey。
-- 默认回调路径为 `/api/wecom/callback`，适合由企业微信或中间转发服务把群消息投递到 CRM。
-- 当前已支持明文 XML、明文 JSON 和已解密内容接收；如果生产企业微信启用加密 XML，需要在接入层完成签名校验和 AES 解密，或继续扩展 wecom 服务的解密能力。
+- 群机器人发送：维护群机器人 Webhook、robot key、默认 @ 人、默认消息类型和默认内容。该模式只用于 CRM 主动向企微群推送消息，不具备读取群聊或接收 @ 内容的能力。
+- 群机器人消息体：集成平台企微协议支持直接发送官方 `msgtype` 消息体；默认构造支持 `text`、`markdown`、`image`、`file`、`news`，并按每个机器人每分钟 20 条作为频率设计参考。
+- 群消息采集写入 CRM：采用企业微信智能机器人官方 WebSocket 长连接模式。CRM 的 `huafu-crm-wecom` 服务启动后连接 `wss://openws.work.weixin.qq.com`，发送 `aibot_subscribe` 订阅，收到 `aibot_msg_callback` 后写入 CRM。
+- 如果只有 Bot ID 和 Secret，在外围系统配置里填写“Bot ID”和“Bot Secret”即可；接收模式保持“官方智能机器人长连接”，长连接地址保持默认。
+- CRM 侧配置项包括接收模式、长连接地址、写入模式、关键词、Bot ID、Bot Secret。
+- 收到的官方消息体会落 `crm_wecom_message_log`，命中写入策略后生成日报并触发 AI 解析。兼容字段包括 `body.msgid`、`body.chatid`、`body.from.userid`、`body.msgtype`、`body.text.content`。
+- 如果使用企业微信应用回调，当前已支持明文 XML、明文 JSON 和已解密内容接收；生产加密 XML 需要在接入层完成签名校验和 AES 解密，或继续扩展 wecom 服务的解密能力。
+
+备用诊断 wecom-cli 消息能力：
+
+```bash
+./scripts/wecom-cli-diagnose.sh
+```
+
+如果输出“未获得 msg 消息能力”或 `wecom-cli msg --help` 报“暂不支持授权机器人「消息」使用权限”，需要在企业微信后台给该 Bot 开通/授权消息能力。只有 Bot ID 和 Secret 但没有 `msg` 能力时，CRM 无法读取群消息。
 
 ## 开发约定
 

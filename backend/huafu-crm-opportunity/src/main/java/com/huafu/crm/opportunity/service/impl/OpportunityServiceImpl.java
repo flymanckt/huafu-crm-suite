@@ -13,6 +13,7 @@ import com.huafu.crm.opportunity.service.OpportunityService;
 import com.huafu.crm.opportunity.vo.OpportunityVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,9 +25,11 @@ import java.util.UUID;
 public class OpportunityServiceImpl implements OpportunityService {
     private final OpportunityMapper mapper;
     private final LostOrderMapper lostOrderMapper;
-    public OpportunityServiceImpl(OpportunityMapper mapper, LostOrderMapper lostOrderMapper) {
+    private final JdbcTemplate jdbcTemplate;
+    public OpportunityServiceImpl(OpportunityMapper mapper, LostOrderMapper lostOrderMapper, JdbcTemplate jdbcTemplate) {
         this.mapper = mapper;
         this.lostOrderMapper = lostOrderMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override @Transactional
@@ -152,6 +155,22 @@ public class OpportunityServiceImpl implements OpportunityService {
             e.getExpectedCloseDate(), e.getActualCloseDate(), e.getWinProbability(),
             e.getLostReason(), e.getLostType(), e.getCompetitorName(), e.getQuoteId(),
             e.getOrderNo(), e.getRemark(), e.getSourceLeadId(),
-            e.getCreatedBy(), e.getCreatedTime(), e.getVersion());
+            e.getCreatedBy(), e.getCreatedTime(), e.getVersion(), customerName(e.getCustomerId()));
+    }
+
+    private String customerName(Long customerId) {
+        if (customerId == null) {
+            return null;
+        }
+        try {
+            return jdbcTemplate.query("""
+                    SELECT customer_name
+                    FROM crm_customer
+                    WHERE id = ? AND COALESCE(deleted, 0) = 0
+                    LIMIT 1
+                    """, rs -> rs.next() ? rs.getString("customer_name") : null, customerId);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

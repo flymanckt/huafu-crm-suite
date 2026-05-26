@@ -60,24 +60,26 @@
                   <el-tree-select
                     v-model="form.ownerDeptId"
                     :data="deptTree"
-                    :props="{ label: 'deptName', value: 'id', children: 'children' }"
-                    check-strictly
-                    clearable
-                    placeholder="默认取当前用户部门"
-                    style="width:100%"
-                  />
+	                    :props="{ label: 'deptName', value: 'id', children: 'children' }"
+	                    check-strictly
+	                    filterable
+	                    default-expand-all
+	                    clearable
+	                    placeholder="默认取负责人部门，可选择最末级部门"
+	                    style="width:100%"
+	                  />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item label="负责人">
-                  <el-select v-model="form.ownerUserId" placeholder="默认取当前用户" clearable filterable style="width:100%">
-                    <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
-                  </el-select>
+	                  <el-select v-model="form.ownerUserId" placeholder="默认取当前用户" clearable filterable style="width:100%" @change="handleOwnerUserChange">
+	                    <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
+	                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item label="客户分类" prop="category">
-                  <DictSelect v-model="form.category" dict-code="customer_category" value-type="number" style="width:100%" />
+	                  <DictSelect v-model="form.category" dict-code="customer_category" style="width:100%" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -115,7 +117,7 @@
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="客户来源">
-                  <DictSelect v-model="form.source" dict-code="customer_source" value-type="number" clearable style="width:100%" />
+	                  <DictSelect v-model="form.source" dict-code="customer_source" clearable style="width:100%" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -125,7 +127,7 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="主要客户群体">
-                  <DictSelect v-model="form.customerGroup" dict-code="customer_group" value-type="number" clearable style="width:100%" />
+	                  <DictSelect v-model="form.customerGroup" dict-code="customer_group" clearable style="width:100%" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -275,24 +277,26 @@
                     <el-tree-select
                       v-model="form.ownerDeptId"
                       :data="deptTree"
-                      :props="{ label: 'deptName', value: 'id', children: 'children' }"
-                      check-strictly
-                      clearable
-                    placeholder="默认取当前用户部门"
-                      style="width:100%"
-                    />
+	                      :props="{ label: 'deptName', value: 'id', children: 'children' }"
+	                      check-strictly
+	                      filterable
+	                      default-expand-all
+	                      clearable
+	                      placeholder="默认取负责人部门，可选择最末级部门"
+	                      style="width:100%"
+	                    />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
                   <el-form-item label="负责人">
-                  <el-select v-model="form.ownerUserId" placeholder="默认取当前用户" clearable filterable style="width:100%">
-                      <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
-                    </el-select>
+	                  <el-select v-model="form.ownerUserId" placeholder="默认取当前用户" clearable filterable style="width:100%" @change="handleOwnerUserChange">
+	                      <el-option v-for="user in userOptions" :key="user.id" :label="user.realName || user.username" :value="user.id" />
+	                    </el-select>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
                   <el-form-item label="客户分类" prop="category">
-                    <DictSelect v-model="form.category" dict-code="customer_category" value-type="number" style="width:100%" />
+	                    <DictSelect v-model="form.category" dict-code="customer_category" style="width:100%" />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -330,7 +334,7 @@
               <el-row :gutter="16">
                 <el-col :span="12">
                   <el-form-item label="客户来源">
-                    <DictSelect v-model="form.source" dict-code="customer_source" value-type="number" clearable style="width:100%" />
+	                    <DictSelect v-model="form.source" dict-code="customer_source" clearable style="width:100%" />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -340,7 +344,7 @@
                 </el-col>
                 <el-col :span="12">
                   <el-form-item label="主要客户群体">
-                    <DictSelect v-model="form.customerGroup" dict-code="customer_group" value-type="number" clearable style="width:100%" />
+	                    <DictSelect v-model="form.customerGroup" dict-code="customer_group" clearable style="width:100%" />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -602,6 +606,41 @@ const regionOptions = provinceCityDistrict.map(province => ({
   }))
 }))
 
+const normalizeRegionValue = (province = '', city = '', district = '') => {
+  const stripProvince = (value) => String(value || '').replace(/省$|市$|自治区$|壮族自治区$|回族自治区$|维吾尔自治区$/u, '')
+  const stripCity = (value) => String(value || '').replace(/市$|地区$|盟$|自治州$/u, '')
+  const provinceText = stripProvince(province)
+  const cityText = stripCity(city)
+  const districtText = String(district || '')
+  const provinceNode = provinceCityDistrict.find(item =>
+    item.p === province || item.p === provinceText || provinceText.includes(item.p) || String(province).includes(item.p)
+  )
+  if (!provinceNode) return [province, city, district].filter(Boolean)
+  const cityNode = provinceNode.c.find(item =>
+    item.n === city || stripCity(item.n) === cityText || String(city).includes(stripCity(item.n)) || String(city).includes(item.n)
+  ) || (provinceNode.c.length === 1 ? provinceNode.c[0] : null)
+  if (!cityNode) return [provinceNode.p, city, district].filter(Boolean)
+  const districtNode = cityNode.d.find(item =>
+    item === district || districtText.includes(item) || item.includes(districtText)
+  )
+  return [provinceNode.p, cityNode.n, districtNode || district].filter(Boolean)
+}
+
+const applyAddressRegion = (province, city, district) => {
+  const normalized = normalizeRegionValue(province, city, district)
+  addressRegion.value = normalized
+  form.value.province = normalized[0] || ''
+  form.value.city = normalized[1] || ''
+  form.value.district = normalized[2] || ''
+}
+
+const applyRegionFromAddressText = (address) => {
+  const region = parseAddressRegion(address)
+  if (region) {
+    applyAddressRegion(region.province, region.city, region.district)
+  }
+}
+
 const getStoredUserInfo = () => {
   try {
     return JSON.parse(localStorage.getItem('userInfo') || '{}')
@@ -638,6 +677,11 @@ const applyCurrentUserDefaults = async () => {
   }
 }
 
+const handleOwnerUserChange = (id) => {
+  const selected = userOptions.value.find(user => String(user.id) === String(id))
+  form.value.ownerDeptId = selected?.deptId || null
+}
+
 const loadOptions = async () => {
   try {
     const [depts, users] = await Promise.all([
@@ -665,7 +709,7 @@ const loadDetail = async () => {
       ...normalizeCustomerForForm(data)
     }
     // 地址
-    if (data.province) addressRegion.value = [data.province, data.city, data.district].filter(Boolean)
+	    if (data.province) applyAddressRegion(data.province, data.city, data.district)
     if (data.paymentDays != null) form.value.paymentDays = Number(data.paymentDays)
     if (data.machineCount != null) form.value.machineCount = Number(data.machineCount)
   } else {
@@ -674,11 +718,8 @@ const loadDetail = async () => {
 }
 
 watch(() => form.value.address, (address) => {
-  if (!address || addressRegion.value.length) return
-  const region = parseAddressRegion(address)
-  if (region) {
-    addressRegion.value = [region.province, region.city, region.district].filter(Boolean)
-  }
+  if (!address) return
+  applyRegionFromAddressText(address)
 })
 
 const openAddressPicker = () => {
@@ -690,12 +731,11 @@ const handleAddressSelect = (data) => {
   form.value.address = data.address || form.value.address
   form.value.locationLng = data.lng ?? form.value.locationLng
   form.value.locationLat = data.lat ?? form.value.locationLat
-  if (data.province || data.city || data.district) {
-    addressRegion.value = [data.province, data.city, data.district].filter(Boolean)
-    form.value.province = data.province || ''
-    form.value.city = data.city || ''
-    form.value.district = data.district || ''
-  }
+	  if (data.province || data.city || data.district) {
+	    applyAddressRegion(data.province, data.city, data.district)
+	  } else {
+	    applyRegionFromAddressText(form.value.address)
+	  }
 }
 
 const buildSearchAddress = () => {
@@ -712,9 +752,10 @@ const verifyTypedAddress = async () => {
   }
   addressVerifying.value = true
   try {
-    const result = await geocodeAddress(address, addressRegion.value?.[1] || form.value.city || '')
-    handleAddressSelect(result)
-    ElMessage.success('定位校验成功')
+	    const result = await geocodeAddress(address, addressRegion.value?.[1] || form.value.city || '')
+	    handleAddressSelect(result)
+	    applyRegionFromAddressText(result.address || address)
+	    ElMessage.success('定位校验成功')
   } catch (error) {
     ElMessage.error(error.message || '定位不到该地址，请填写更准确的地址')
   } finally {

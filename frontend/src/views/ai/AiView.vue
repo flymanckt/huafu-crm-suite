@@ -43,16 +43,11 @@
                       <el-tag size="small" :type="item.客户匹配状态==='已匹配' ? 'success' : 'warning'">{{ item.客户匹配状态 || '未匹配' }}</el-tag>
                       <span class="match-text">{{ item.客户匹配名称 || item.客户编码 || '-' }}</span>
                     </el-descriptions-item>
-                    <el-descriptions-item label="匹配产品">
-                      <el-tag size="small" :type="item.产品匹配状态==='已匹配' ? 'success' : 'warning'">{{ item.产品匹配状态 || '未匹配' }}</el-tag>
-                      <span class="match-text">{{ item.产品匹配名称 || item.产品编码 || '-' }}</span>
-                    </el-descriptions-item>
                     <el-descriptions-item label="预估金额">{{ item['预估金额(万元)'] ?? '-' }}万</el-descriptions-item>
                     <el-descriptions-item label="意向度">
                       <el-tag :type="item.意向度==='高'?'danger':item.意向度==='中'?'warning':'info'" size="small">{{ item.意向度 }}</el-tag>
                     </el-descriptions-item>
                     <el-descriptions-item label="商机ID">{{ item.商机ID || '-' }}</el-descriptions-item>
-                    <el-descriptions-item label="产品编码">{{ item.产品编码 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="跟进要点" :span="2">{{ item.跟进要点 || '-' }}</el-descriptions-item>
                   </el-descriptions>
                 </el-card>
@@ -61,12 +56,14 @@
                 <template #title>商情 ({{ result.商情列表.length }})</template>
                 <el-card v-for="(item, idx) in result.商情列表" :key="idx" shadow="never" style="margin-bottom:8px">
                   <el-descriptions :column="2" size="small" border>
+                    <el-descriptions-item label="客户">{{ item.客户名称 || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="产品">{{ item.产品需求 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="竞品">{{ item.竞品名称 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="竞品价格">{{ item.竞品价格 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="折扣">{{ item.折扣 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="毛利影响">{{ item.我方毛利影响 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="商情ID">{{ item.商情ID || '-' }}</el-descriptions-item>
-                    <el-descriptions-item label="匹配产品">{{ item.产品匹配名称 || item.产品编码 || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="匹配客户">{{ item.客户匹配名称 || item.客户编码 || '-' }}</el-descriptions-item>
                   </el-descriptions>
                 </el-card>
               </el-collapse-item>
@@ -75,6 +72,7 @@
                 <el-card v-for="(item, idx) in result.丢单记录" :key="idx" shadow="never" style="margin-bottom:8px">
                   <el-descriptions :column="2" size="small" border>
                     <el-descriptions-item label="客户">{{ item.客户名称 || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="产品">{{ item.产品需求 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="原因">{{ item.丢单原因 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="竞品">{{ item.竞品名称 || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="竞品价格">{{ item.竞品价格 || '-' }}</el-descriptions-item>

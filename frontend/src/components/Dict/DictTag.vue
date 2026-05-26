@@ -13,7 +13,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useDict } from '@/composables/useDict'
 
 const props = defineProps({
@@ -25,9 +25,18 @@ const props = defineProps({
   disableTransitions: { type: Boolean, default: false }
 })
 
-const { getDictLabel, getDictColor } = useDict()
+const { getDictLabel, getDictColor, getDictItems, dictCache } = useDict()
 
 const displayText = computed(() => getDictLabel(props.dictCode, props.value))
+
+const ensureDictLoaded = () => {
+  if (props.dictCode && !dictCache[props.dictCode]) {
+    getDictItems(props.dictCode)
+  }
+}
+
+onMounted(ensureDictLoaded)
+watch(() => props.dictCode, ensureDictLoaded)
 
 // 设计文档定义的多彩色 Map（key = 后端返回的 itemCode）
 const COLOR_MAP = {

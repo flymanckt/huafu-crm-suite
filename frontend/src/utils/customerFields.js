@@ -33,10 +33,6 @@ export const categoryCodes = { SHANGXIAN: 1, MIANLIAO: 2, FUZHUANG: 3, MAOYISHAN
 export const sourceCodes = { ZHANHUI: 1, ZHUANJIESHAO: 2, ZIZHUKAIFA: 3, PINGTAI: 4 }
 export const customerGroupCodes = { WAIXIAO: 1, NEIXIAOLIUTONG: 2, DIANSHANG: 3 }
 
-const categoryValueCodes = { 1: 'SHANGXIAN', 2: 'MIANLIAO', 3: 'FUZHUANG', 4: 'MAOYISHANG' }
-const sourceValueCodes = { 1: 'ZHANHUI', 2: 'ZHUANJIESHAO', 3: 'ZIZHUKAIFA', 4: 'PINGTAI' }
-const customerGroupValueCodes = { 1: 'WAIXIAO', 2: 'NEIXIAOLIUTONG', 3: 'DIANSHANG' }
-
 export const customerTypeLabels = {
   1: '直接客户',
   2: '代理',
@@ -183,9 +179,9 @@ export const customerLabel = {
 
 export function normalizeCustomerForForm(data = {}) {
   const normalizedStage = enumValue(data.customerStage ?? data.stage, stageCodes)
-  const normalizedCategory = enumValue(data.customerCategory ?? data.category, categoryCodes)
-  const normalizedSource = enumValue(data.customerSource ?? data.source, sourceCodes)
-  const normalizedCustomerGroup = enumValue(data.mainCustomerGroup ?? data.customerGroup, customerGroupCodes)
+  const normalizedCategory = data.customerCategory ?? data.category ?? null
+  const normalizedSource = data.customerSource ?? data.source ?? null
+  const normalizedCustomerGroup = data.mainCustomerGroup ?? data.customerGroup ?? null
 
   return {
     ...data,
@@ -223,13 +219,6 @@ const INTEGER_ENUM_FIELDS = [
   'type', 'level', 'status', 'businessType', 'customerStage',
   'machineCount', 'riskLevel',
 ]
-// String 枚举：表单 Integer → API String（如 1 → 'SHANGXIAN'）
-const STRING_ENUM_REVERSE = {
-  customerCategory: categoryValueCodes,   // { 1: 'SHANGXIAN', 2: 'MIANLIAO', ... }
-  customerSource: sourceValueCodes,        // { 1: 'ZHANHUI', 2: 'ZHUANJIESHAO', ... }
-  mainCustomerGroup: customerGroupValueCodes, // { 1: 'WAIXIAO', 2: 'NEIXIAOLIUTONG', ... }
-}
-
 export function buildCustomerUpdatePayload(source = {}) {
   const payload = {}
 
@@ -263,34 +252,18 @@ export function buildCustomerUpdatePayload(source = {}) {
     }
   })
 
-  // ③ String 枚举：表单 Integer → API String
-  for (const [field, reverseCodes] of Object.entries(STRING_ENUM_REVERSE)) {
-    const val = source[field]
-    if (val === null || val === undefined || val === '') continue
-    const num = Number(val)
-    if (Number.isFinite(num)) {
-      // 有反向映射则转字符串；无对应则保持数字（兼容未来扩展值）
-      payload[field] = reverseCodes[num] ?? num
-    } else {
-      payload[field] = val
-    }
-  }
-
-  // ④ 字段名归一（表单别名 → API标准名）
+  // ③ 字段名归一（表单别名 → API标准名）
   if (source.capacityInfo != null) putIfPresent(payload, 'productionCapacity', source.capacityInfo)
   if (source.salesName != null) putIfPresent(payload, 'salesMerchandiser', source.salesName)
   if (source.stage != null) putIfPresent(payload, 'customerStage', Number(source.stage) || source.stage)
   if (source.category != null && source.category !== '') {
-    const val = Number(source.category)
-    putIfPresent(payload, 'customerCategory', Number.isFinite(val) ? categoryValueCodes[val] ?? val : source.category)
+    putIfPresent(payload, 'customerCategory', source.category)
   }
   if (source.source != null && source.source !== '') {
-    const val = Number(source.source)
-    putIfPresent(payload, 'customerSource', Number.isFinite(val) ? sourceValueCodes[val] ?? val : source.source)
+    putIfPresent(payload, 'customerSource', source.source)
   }
   if (source.customerGroup != null && source.customerGroup !== '') {
-    const val = Number(source.customerGroup)
-    putIfPresent(payload, 'mainCustomerGroup', Number.isFinite(val) ? customerGroupValueCodes[val] ?? val : source.customerGroup)
+    putIfPresent(payload, 'mainCustomerGroup', source.customerGroup)
   }
   if (source.competitorShare != null) putIfPresent(payload, 'competitorShareJson', source.competitorShare)
 

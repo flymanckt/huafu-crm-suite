@@ -627,15 +627,42 @@ CRM 是高频工作系统，不是展示型官网。页面应保持：
 
 ### 11.19 企微集成
 
-现状：企业微信接收和消息日志存在，外围系统配置已按“群机器人发送”和“消息接收写入 CRM”分组。群机器人发送用于 CRM 主动向企微群推送文本或结构化消息；消息接收入口默认 `/api/wecom/callback`，支持明文 XML、明文 JSON 或已解密内容进入 CRM，按配置开关和关键词将日报类消息写入 `crm_daily_report`，并保留 `crm_wecom_message_log` 与日报的关联。
+现状：企业微信接收和消息日志存在，外围系统配置已按“群机器人发送”和“群消息采集写入CRM”分组。群机器人发送用于 CRM 主动向企微群推送文本或结构化消息；群内用户 @ 机器人后的内容写入 CRM，采用企业微信智能机器人官方 WebSocket 长连接模式：`huafu-crm-wecom` 服务启动后连接 `wss://openws.work.weixin.qq.com`，发送 `aibot_subscribe` 订阅，收到 `aibot_msg_callback` 后进入现有消息日志、日报写入和 AI 解析链路。
 
 当前规则：
 
 1. 群机器人 webhook 模式只能用于 CRM 向企微群推送，不能直接读取群消息。
-2. 群内成员 @ 机器人后要写入 CRM，必须配置企业微信回调或中间转发服务，把消息投递到 CRM 的回调接口。
-3. 回调收到的消息先落消息日志，再按 `wecom.receive_enabled`、`wecom.receive_write_mode` 和 `wecom.receive_keywords` 判断是否写入日报。
+2. 群内成员 @ 机器人后要写入 CRM，由 `huafu-crm-wecom` 内置 WebSocket 客户端直接接收官方 `aibot_msg_callback`。
+3. CRM 收到的消息先落消息日志，再按 `wecom.receive_enabled`、`wecom.receive_write_mode` 和 `wecom.receive_keywords` 判断是否写入日报。
 4. 日报写入后触发 AI 日报解析；AI 解析失败只更新日报和消息日志状态，不阻断企微回调接收。
-5. Token 和 EncodingAESKey 已在配置入口预留；生产加密 XML 接入需要补齐签名校验和 AES 解密，或由网关/中间服务解密后转发明文。
+5. 业务配置只需要维护 `wecom.cli_bot_id`、`wecom.cli_bot_secret` 和 `wecom.receive_mode=WECOM_AI_BOT`；长连接地址默认 `wecom.aibot_websocket_url=wss://openws.work.weixin.qq.com`。
+6. 集成平台企微协议支持直接发送官方 `msgtype` 消息体；默认构造支持 `text`、`markdown`、`image`、`file`、`news`。图片消息需要 `base64` 和 `md5`，文件消息需要先上传获得 `media_id`。
+7. 群机器人发送需要按官方频率限制设计，默认以每个机器人每分钟 20 条作为限流参考，批量通知应合并内容或走待发送队列。
+
+CLI Agent 投递到 CRM 的推荐单条消息格式：
+
+```json
+{
+  "msg_id": "企微消息ID",
+  "msg_type": "text",
+  "from_user": "发送人企微账号",
+  "room_id": "群ID或群名",
+  "content": "@机器人 今日拜访客户..."
+}
+```
+
+长连接部署规则：
+
+1. 在 CRM 外围系统配置中维护 Bot ID 和 Bot Secret。
+2. 接收模式选择“官方智能机器人长连接”。
+3. 重启 `huafu-crm-wecom` 服务；服务会自动连接企微长连接网关并订阅消息。
+4. 收到官方消息体后，解析 `body.msgid`、`body.chatid`、`body.from.userid`、`body.msgtype`、`body.text.content` 写入消息日志。
+
+排障规则：
+
+1. CRM 配了 Bot ID 和 Secret 但企微发消息无效果，先查 `crm_wecom_message_log` 是否有记录。
+2. 消息日志为 0 时，优先查看 `logs/wecom.log` 是否出现连接成功、订阅成功或订阅失败。
+3. 如果订阅失败，检查 Bot ID、Secret、企业微信后台该智能机器人是否已启用并加入对应群聊。
 
 优化方向：
 

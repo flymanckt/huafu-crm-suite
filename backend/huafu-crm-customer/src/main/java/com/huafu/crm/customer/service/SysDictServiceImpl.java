@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.huafu.crm.common.entity.SysDictItem;
 import com.huafu.crm.common.entity.SysDictType;
+import com.huafu.crm.common.exception.BizException;
 import com.huafu.crm.common.mapper.SysDictItemMapper;
 import com.huafu.crm.common.mapper.SysDictTypeMapper;
 import org.springframework.cache.annotation.Cacheable;
@@ -131,13 +132,54 @@ public class SysDictServiceImpl extends ServiceImpl<SysDictTypeMapper, SysDictTy
     @Override
     @Transactional
     public boolean saveDictItem(SysDictItem dictItem) {
+        prepareAndValidateDictItem(dictItem, true);
         return dictItemMapper.insert(dictItem) > 0;
     }
 
     @Override
     @Transactional
     public boolean updateDictItem(SysDictItem dictItem) {
+        prepareAndValidateDictItem(dictItem, false);
         return dictItemMapper.updateById(dictItem) > 0;
+    }
+
+    private void prepareAndValidateDictItem(SysDictItem dictItem, boolean create) {
+        if (dictItem == null) {
+            throw new BizException(1001, "字典项不能为空");
+        }
+        if (dictItem.getDictId() == null) {
+            throw new BizException(1001, "字典类型不能为空");
+        }
+        if (!StringUtils.hasText(dictItem.getItemCode())) {
+            throw new BizException(1001, "字典项编码不能为空");
+        }
+        if (!StringUtils.hasText(dictItem.getItemName())) {
+            throw new BizException(1001, "字典项名称不能为空");
+        }
+
+        dictItem.setItemCode(dictItem.getItemCode().trim());
+        dictItem.setItemName(dictItem.getItemName().trim());
+        if (StringUtils.hasText(dictItem.getItemValue())) {
+            dictItem.setItemValue(dictItem.getItemValue().trim());
+        } else {
+            dictItem.setItemValue(dictItem.getItemCode());
+        }
+        if (dictItem.getSortOrder() == null) dictItem.setSortOrder(0);
+        if (dictItem.getStatus() == null) dictItem.setStatus(1);
+        if (dictItem.getDefaultFlag() == null) dictItem.setDefaultFlag(0);
+        if (dictItem.getShowCode() == null) dictItem.setShowCode(1);
+        if (create) dictItem.setDeleted(0);
+
+        LambdaQueryWrapper<SysDictItem> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysDictItem::getDictId, dictItem.getDictId())
+               .eq(SysDictItem::getItemCode, dictItem.getItemCode())
+               .eq(SysDictItem::getDeleted, 0);
+        if (dictItem.getId() != null) {
+            wrapper.ne(SysDictItem::getId, dictItem.getId());
+        }
+        if (dictItemMapper.selectCount(wrapper) > 0) {
+            throw new BizException(1002, "字典项编码已存在，请更换编码：" + dictItem.getItemCode());
+        }
     }
 
     @Override

@@ -43,6 +43,12 @@ public class ConfiguredAiClient implements AiClient {
     @Override
     @Transactional
     public DailyReportAiResult parseDailyReport(String text) {
+        return parseDailyReport(text, null);
+    }
+
+    @Override
+    @Transactional
+    public DailyReportAiResult parseDailyReport(String text, Long dailyReportId) {
         String apiKey = config("ai.api_key");
         String baseUrl = config("ai.base_url");
         String model = config("ai.model");
@@ -61,8 +67,8 @@ public class ConfiguredAiClient implements AiClient {
                 ? requestAnthropicMessage(messagesUrl(baseUrl), apiKey, model, content, timeoutMs)
                 : requestChatCompletion(chatCompletionUrl(baseUrl), apiKey, model, content, timeoutMs);
         Map<String, Object> parsed = parseAnswer(answer);
-        enrichWithMasterData(parsed);
-        persistParsedDailyReport(content, parsed);
+        enrichWithMasterData(parsed, content);
+        persistParsedDailyReport(content, parsed, dailyReportId);
         return toResult(content, parsed);
     }
 
@@ -160,32 +166,41 @@ public class ConfiguredAiClient implements AiClient {
         }
     }
 
-    private void enrichWithMasterData(Map<String, Object> parsed) {
+    private void enrichWithMasterData(Map<String, Object> parsed, String originalText) {
         List<CustomerCandidate> customers = loadCustomers();
-        List<ProductCandidate> products = loadProducts();
 
         forEachRow(parsed.get("商机列表"), row -> {
-            enrichCustomer(row, customers, "客户名称", "客户", "客户/品牌");
-            enrichProduct(row, products, "产品需求", "产品名称", "产品", "意向产品");
+            enrichCustomer(row, customers, originalText, "客户名称", "客户", "客户/品牌");
+            normalizeProductText(row);
         });
         forEachRow(parsed.get("商情列表"), row -> {
-            enrichCustomer(row, customers, "客户名称", "客户", "客户/品牌");
-            enrichProduct(row, products, "产品需求", "产品名称", "产品", "意向产品");
+            enrichCustomer(row, customers, originalText, "客户名称", "客户", "客户/品牌");
+            normalizeProductText(row);
         });
         forEachRow(parsed.get("丢单记录"), row -> {
-            enrichCustomer(row, customers, "客户名称", "客户", "客户/品牌");
-            enrichProduct(row, products, "产品需求", "产品名称", "产品", "意向产品");
+            enrichCustomer(row, customers, originalText, "客户名称", "客户", "客户/品牌");
+            normalizeProductText(row);
         });
-        withMap(parsed.get("今日拜访"), row -> enrichCustomer(row, customers, "客户名称", "客户", "拜访客户"));
-        withMap(parsed.get("明日计划"), row -> enrichCustomer(row, customers, "计划拜访客户", "客户名称", "客户"));
+        withMap(parsed.get("今日拜访"), row -> {
+            if (hasAnyText(row, "客户名称", "客户", "拜访客户", "拜访类型", "拜访成效")) {
+                enrichCustomer(row, customers, originalText, "客户名称", "客户", "拜访客户");
+            }
+        });
+        withMap(parsed.get("明日计划"), row -> {
+            if (hasAnyText(row, "计划拜访客户", "客户名称", "客户", "计划事项")) {
+                enrichCustomer(row, customers, originalText, "计划拜访客户", "客户名称", "客户");
+            }
+        });
     }
 
-    private void persistParsedDailyReport(String originalText, Map<String, Object> parsed) {
+    private void persistParsedDailyReport(String originalText, Map<String, Object> parsed, Long existingReportId) {
         List<?> opportunities = list(parsed.get("商机列表"));
         List<?> intelligence = list(parsed.get("商情列表"));
         List<?> lostOrders = list(parsed.get("丢单记录"));
 
-        Long reportId = insertDailyReport(originalText, toJson(parsed), opportunities.size(), intelligence.size(), lostOrders.size());
+        Long reportId = existingReportId == null
+                ? insertDailyReport(originalText, toJson(parsed), opportunities.size(), intelligence.size(), lostOrders.size())
+                : updateExistingDailyReport(existingReportId, originalText, toJson(parsed), opportunities.size(), intelligence.size(), lostOrders.size());
         List<String> opportunityIds = new ArrayList<>();
         forEachRow(parsed.get("商机列表"), row -> opportunityIds.add(String.valueOf(insertOpportunity(originalText, row))));
 
@@ -217,6 +232,29 @@ public class ConfiguredAiClient implements AiClient {
         updateDailyReportParsedJson(reportId, parsed);
     }
 
+    private Long updateExistingDailyReport(Long reportId, String originalText, String parsedJson, int opportunityCount, int intelligenceCount, int lostOrderCount) {
+        OffsetDateTime now = OffsetDateTime.now();
+        int updated = jdbcTemplate.update("""
+                UPDATE crm_daily_report
+                SET content_text = COALESCE(NULLIF(?, ''), content_text),
+                    parsed_json = CAST(? AS jsonb),
+                    opportunity_count = ?,
+                    market_intelligence_count = ?,
+                    lost_order_count = ?,
+                    parse_status = 2,
+                    parse_error = NULL,
+                    parse_time = ?,
+                    updated_by = 'AI',
+                    updated_time = ?
+                WHERE id = ?
+                """,
+                originalText, parsedJson, opportunityCount, intelligenceCount, lostOrderCount, now, now, reportId);
+        if (updated == 0) {
+            throw new BizException(1001, "日报记录不存在，无法回写AI解析结果：" + reportId);
+        }
+        return reportId;
+    }
+
     private Long insertDailyReport(String originalText, String parsedJson, int opportunityCount, int intelligenceCount, int lostOrderCount) {
         OffsetDateTime now = OffsetDateTime.now();
         return jdbcTemplate.queryForObject("""
@@ -242,7 +280,7 @@ public class ConfiguredAiClient implements AiClient {
         Long id = nextId();
         OffsetDateTime now = OffsetDateTime.now();
         String customerName = firstText(row, "客户匹配名称", "客户名称", "客户");
-        String productName = firstText(row, "产品匹配名称", "产品需求", "产品名称", "产品");
+        String productName = productText(row);
         String name = nonBlank(customerName, "未知客户") + " - " + nonBlank(productName, "产品需求") + "商机";
         jdbcTemplate.update("""
                 INSERT INTO crm_opportunity
@@ -272,7 +310,7 @@ public class ConfiguredAiClient implements AiClient {
                 """,
                 id, generatedNo("LEAD"), longValue(row.get("客户主数据ID")),
                 firstText(row, "客户匹配名称", "客户名称", "客户"),
-                firstText(row, "产品匹配名称", "产品需求", "产品名称", "产品"),
+                productText(row),
                 firstText(row, "竞品名称"), decimalValue(row.get("竞品价格")),
                 decimalValue(row.get("折扣")), decimalValue(row.get("我方毛利影响")),
                 defaultUserId(), defaultUserId(), firstText(row, "说明"), originalText, toJson(row), now, now);
@@ -369,46 +407,9 @@ public class ConfiguredAiClient implements AiClient {
                 ));
     }
 
-    private List<ProductCandidate> loadProducts() {
-        return jdbcTemplate.query("""
-                SELECT id, record_no, title, payload_json
-                FROM crm_module_record
-                WHERE COALESCE(deleted, 0) = 0 AND module_key = 'product-master'
-                ORDER BY updated_time DESC NULLS LAST, created_time DESC NULLS LAST
-                LIMIT 5000
-                """,
-                (rs, rowNum) -> productCandidate(
-                        rs.getLong("id"),
-                        rs.getString("record_no"),
-                        rs.getString("title"),
-                        rs.getString("payload_json")
-                ));
-    }
-
-    private ProductCandidate productCandidate(Long id, String recordNo, String title, String payloadJson) {
-        String productName = title;
-        String productCode = recordNo;
-        String productType = "";
-        String yarnType = "";
-        String composition = "";
-        try {
-            if (hasText(payloadJson)) {
-                JsonNode payload = objectMapper.readTree(payloadJson);
-                productName = nonBlank(text(payload, "productName"), productName);
-                productCode = nonBlank(text(payload, "productCode"), productCode);
-                productType = text(payload, "productType");
-                yarnType = text(payload, "yarnType");
-                composition = text(payload, "composition");
-            }
-        } catch (Exception ignored) {
-            productName = title;
-        }
-        return new ProductCandidate(id, productCode, productName, productType, yarnType, composition, title);
-    }
-
-    private void enrichCustomer(Map<String, Object> row, List<CustomerCandidate> customers, String... keys) {
+    private void enrichCustomer(Map<String, Object> row, List<CustomerCandidate> customers, String originalText, String... keys) {
         String keyword = firstText(row, keys);
-        Match<CustomerCandidate> match = bestCustomer(keyword, customers);
+        Match<CustomerCandidate> match = bestCustomer(keyword, row == null ? "" : row.toString(), originalText, customers);
         if (match == null) {
             if (hasText(keyword)) row.put("客户匹配状态", "未匹配");
             return;
@@ -421,44 +422,49 @@ public class ConfiguredAiClient implements AiClient {
         row.put("客户匹配分数", match.score());
     }
 
-    private void enrichProduct(Map<String, Object> row, List<ProductCandidate> products, String... keys) {
-        String keyword = firstText(row, keys);
-        Match<ProductCandidate> match = bestProduct(keyword, products);
-        if (match == null) {
-            if (hasText(keyword)) row.put("产品匹配状态", "未匹配");
-            return;
+    private void normalizeProductText(Map<String, Object> row) {
+        String product = productText(row);
+        if (hasText(product)) {
+            row.put("产品需求", product);
         }
-        ProductCandidate product = match.value();
-        row.put("产品档案ID", String.valueOf(product.id()));
-        row.put("产品编码", nonBlank(product.code(), ""));
-        row.put("产品匹配名称", nonBlank(product.name(), ""));
-        row.put("产品类型", nonBlank(product.type(), ""));
-        row.put("产品匹配状态", "已匹配");
-        row.put("产品匹配分数", match.score());
+        row.remove("产品档案ID");
+        row.remove("产品编码");
+        row.remove("产品匹配名称");
+        row.remove("产品类型");
+        row.remove("产品匹配状态");
+        row.remove("产品匹配分数");
     }
 
-    private Match<CustomerCandidate> bestCustomer(String keyword, List<CustomerCandidate> customers) {
+    private String productText(Map<String, Object> row) {
+        return firstText(row, "产品需求", "产品名称", "产品", "意向产品", "规格型号");
+    }
+
+    private Match<CustomerCandidate> bestCustomer(String keyword, String rowText, String originalText, List<CustomerCandidate> customers) {
+        Match<CustomerCandidate> best = bestCustomerByText(keyword, customers);
+        if (best != null) {
+            return best;
+        }
+        best = bestCustomerByText(rowText, customers);
+        if (best != null) {
+            return best;
+        }
+        List<Match<CustomerCandidate>> reportMatches = new ArrayList<>();
+        for (CustomerCandidate customer : customers) {
+            int score = maxCustomerScore(originalText, customer.name(), customer.shortName(), customer.englishName(), customer.code(), customer.sapCode());
+            if (score >= 80) {
+                reportMatches.add(new Match<>(customer, score));
+            }
+        }
+        return reportMatches.size() == 1 ? reportMatches.get(0) : null;
+    }
+
+    private Match<CustomerCandidate> bestCustomerByText(String text, List<CustomerCandidate> customers) {
         Match<CustomerCandidate> best = null;
         for (CustomerCandidate customer : customers) {
-            int score = maxCustomerScore(keyword, customer.name(), customer.shortName(), customer.englishName(), customer.code(), customer.sapCode());
+            int score = maxCustomerScore(text, customer.name(), customer.shortName(), customer.englishName(), customer.code(), customer.sapCode());
             if (score >= 60 && (best == null || score > best.score())) best = new Match<>(customer, score);
         }
         return best;
-    }
-
-    private Match<ProductCandidate> bestProduct(String keyword, List<ProductCandidate> products) {
-        Match<ProductCandidate> best = null;
-        for (ProductCandidate product : products) {
-            int score = maxScore(keyword, product.name(), product.code(), product.type(), product.yarnType(), product.composition(), product.title());
-            if (score >= 55 && (best == null || score > best.score())) best = new Match<>(product, score);
-        }
-        return best;
-    }
-
-    private int maxScore(String keyword, String... aliases) {
-        int max = 0;
-        for (String alias : aliases) max = Math.max(max, score(keyword, alias));
-        return max;
     }
 
     private int maxCustomerScore(String keyword, String... aliases) {
@@ -606,10 +612,6 @@ public class ConfiguredAiClient implements AiClient {
         return 2;
     }
 
-    private String text(JsonNode node, String field) {
-        return node == null ? "" : node.path(field).asText("");
-    }
-
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -690,22 +692,20 @@ public class ConfiguredAiClient implements AiClient {
                     {"客户名称":"","产品需求":"","预估金额(万元)":null,"意向度":"高/中/低","跟进要点":""}
                   ],
                   "商情列表": [
-                    {"竞品名称":"","竞品价格":"","折扣":"","我方毛利影响":"","说明":""}
+                    {"客户名称":"","产品需求":"","竞品名称":"","竞品价格":"","折扣":"","我方毛利影响":"","说明":""}
                   ],
                   "丢单记录": [
-                    {"客户名称":"","丢单原因":"","竞品名称":"","竞品价格":"","我方报价":"","补救建议":""}
+                    {"客户名称":"","产品需求":"","丢单原因":"","竞品名称":"","竞品价格":"","我方报价":"","补救建议":""}
                   ],
                   "今日拜访": {"客户名称":"","拜访类型":"","拜访成效":""},
                   "明日计划": {"计划拜访客户":"","计划事项":""}
                 }
-                客户名称请尽量输出客户主数据中的正式客户名称；产品需求请尽量输出可在产品档案中匹配的产品名称、编码或规格。
+                客户名称必须从原文中识别客户或品牌，优先输出客户主数据中的正式客户名称；产品需求只从原文中截取产品、品类、规格或需求描述，不要猜测产品档案编码。
                 没有对应内容时，列表返回空数组，对象字段返回空字符串。
                 """;
     }
 
     private record CustomerCandidate(Long id, String code, String name, String shortName, String englishName, String sapCode) {}
-
-    private record ProductCandidate(Long id, String code, String name, String type, String yarnType, String composition, String title) {}
 
     private record Match<T>(T value, int score) {}
 

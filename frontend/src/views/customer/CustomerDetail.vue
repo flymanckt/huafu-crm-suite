@@ -11,9 +11,9 @@
             <div class="summary-left">
               <div class="customer-name">{{ detail.customerName }}</div>
               <div class="customer-tags">
-                <el-tag size="small">{{ customerLabel.type(detail.type) }}</el-tag>
-                <el-tag size="small" :type="customerLevelType[detail.level]">{{ customerLabel.level(detail.level) }}</el-tag>
-                <el-tag size="small" :type="customerStatusType[detail.status]">{{ customerLabel.status(detail.status) }}</el-tag>
+                <DictTag v-if="hasValue(detail.type)" dict-code="customer_type" :value="String(detail.type)" size="small" />
+                <DictTag v-if="hasValue(detail.level)" dict-code="customer_level" :value="String(detail.level)" size="small" />
+                <DictTag v-if="hasValue(detail.status)" dict-code="customer_status" :value="String(detail.status)" size="small" />
               </div>
             </div>
             <div class="summary-right">
@@ -111,7 +111,7 @@ import { ref, onMounted, provide, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCustomerDetail, getContactListV1 } from '@/api/customer'
 import { DataAnalysis, Document, Grid, User, Connection, OfficeBuilding, Paperclip, Menu, Location } from '@element-plus/icons-vue'
-import { customerLabel, customerLevelType, customerStatusType } from '@/utils/customerFields'
+import DictTag from '@/components/Dict/DictTag.vue'
 import OverviewTab from '@/components/customer/tabs/OverviewTab.vue'
 import BasicInfoTab from '@/components/customer/tabs/BasicInfoTab.vue'
 import SapInfoTab from '@/components/customer/tabs/SapInfoTab.vue'
@@ -130,6 +130,7 @@ const contacts = ref([])
 const activeTab = ref('1')
 const drawerVisible = ref(false)
 const detailColumns = ref(Number(localStorage.getItem('customerDetailColumns') || 3))
+const hasValue = (value) => value !== null && value !== undefined && value !== ''
 
 const loadData = async () => {
   detail.value = await getCustomerDetail(detailId)

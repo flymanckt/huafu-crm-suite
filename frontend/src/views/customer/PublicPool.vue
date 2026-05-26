@@ -15,10 +15,10 @@
         <el-table-column v-if="columnVisible('customerCode')" prop="customerCode" label="客户编码" width="130" />
         <el-table-column v-if="columnVisible('customerName')" prop="customerName" label="客户名称" min-width="180" show-overflow-tooltip />
         <el-table-column v-if="columnVisible('type')" prop="type" label="类型" width="90">
-          <template #default="{ row }">{{ {1:'直接客户',2:'代理',3:'终端品牌'}[row.type] }}</template>
+          <template #default="{ row }"><DictTag v-if="hasValue(row.type)" dict-code="customer_type" :value="String(row.type)" size="small" /><span v-else>-</span></template>
         </el-table-column>
         <el-table-column v-if="columnVisible('level')" prop="level" label="级别" width="70">
-          <template #default="{ row }">{{ {1:'AAA',2:'AA',3:'A',4:'B',5:'C'}[row.level] }}</template>
+          <template #default="{ row }"><DictTag v-if="hasValue(row.level)" dict-code="customer_level" :value="String(row.level)" size="small" /><span v-else>-</span></template>
         </el-table-column>
         <el-table-column v-if="columnVisible('publicPoolTime')" prop="publicPoolTime" label="进入公海时间" width="170" />
         <el-table-column label="操作" width="120" fixed="right">
@@ -41,6 +41,7 @@ import { getPublicPoolPage, claimCustomer } from '@/api/customer'
 import BatchUpdateBar from '@/components/common/BatchUpdateBar.vue'
 import ColumnConfigDrawer from '@/components/ColumnConfig/ColumnConfigDrawer.vue'
 import ConfigurableFilterForm from '@/components/FilterConfig/ConfigurableFilterForm.vue'
+import DictTag from '@/components/Dict/DictTag.vue'
 import { useColumnConfig } from '@/composables/useColumnConfig'
 import { Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -62,16 +63,17 @@ const filterFields = [
 const defaultColumns = [
   { key: 'customerCode', label: '客户编码', width: 130, visible: true, fixed: true },
   { key: 'customerName', label: '客户名称', width: 180, visible: true, fixed: true },
-  { key: 'type', label: '类型', width: 90, visible: true },
-  { key: 'level', label: '级别', width: 70, visible: true },
+  { key: 'type', label: '类型', width: 90, visible: true, dictCode: 'customer_type' },
+  { key: 'level', label: '级别', width: 70, visible: true, dictCode: 'customer_level' },
   { key: 'publicPoolTime', label: '进入公海时间', width: 170, visible: true }
 ]
 const columnConfig = useColumnConfig({ pageCode, defaultColumns })
 const columnVisible = key => columnConfig.columns.value.find(c => c.key === key)?.visible !== false
+const hasValue = (value) => value !== null && value !== undefined && value !== ''
 const batchFields = [
-  { key: 'level', label: '级别', type: 'number' },
-  { key: 'type', label: '类型', type: 'number' },
-  { key: 'status', label: '客户状态', type: 'number' },
+  { key: 'level', label: '级别', dictCode: 'customer_level', valueType: 'number' },
+  { key: 'type', label: '类型', dictCode: 'customer_type', valueType: 'number' },
+  { key: 'status', label: '客户状态', dictCode: 'customer_status', valueType: 'number' },
   { key: 'remark', label: '备注' }
 ]
 

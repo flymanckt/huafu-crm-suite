@@ -205,7 +205,7 @@
           <el-col v-if="connectionForm.connectionType === 'WECOM'" :span="24">
             <el-alert
               class="interface-alert"
-              title="企微连接按群机器人 Webhook 模式配置：地址填写机器人 Webhook 完整地址，也可把 key 单独填在认证配置中。接口定义里选择企微协议后即可配置消息字段映射和平台日志。"
+              title="企微连接用于群机器人 Webhook 主动推送；群消息写入 CRM 由外围系统配置中的官方智能机器人 WebSocket 长连接负责。"
               type="info"
               show-icon
               :closable="false"
@@ -974,7 +974,7 @@ const connectionPlaceholder = computed(() => {
 })
 const connectionAuthPlaceholder = computed(() => {
   if (connectionForm.value.connectionType === 'WECOM') {
-    return '{"key":"Webhook key，可选","defaultMsgType":"text","defaultContent":"默认消息","mentionedList":["@all"],"mentionedMobileList":[]}'
+    return '{"key":"Webhook key，可选","defaultMsgType":"text","defaultContent":"默认消息","mentionedList":["@all"],"mentionedMobileList":[],"supportedMsgTypes":["text","markdown","image","file","news"],"rateLimitPerMinute":20,"receiveMode":"WECOM_AI_BOT","websocketUrl":"wss://openws.work.weixin.qq.com","callbackUrl":"/api/wecom/callback"}'
   }
   return 'JSON，如 {"token":"***"}'
 })

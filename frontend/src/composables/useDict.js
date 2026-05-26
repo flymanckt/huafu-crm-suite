@@ -40,13 +40,15 @@ export function useDict() {
   // 获取字典项显示文本
   const getDictLabel = (code, itemCode) => {
     const items = dictCache[code] || []
-    return items.find(i => i.itemCode === itemCode)?.itemName || itemCode
+    const normalized = String(itemCode ?? '')
+    return items.find(i => String(i.itemCode) === normalized)?.itemName || itemCode
   }
 
   // 获取字典项颜色
   const getDictColor = (code, itemCode) => {
     const items = dictCache[code] || []
-    return items.find(i => i.itemCode === itemCode)?.color || ''
+    const normalized = String(itemCode ?? '')
+    return items.find(i => String(i.itemCode) === normalized)?.color || ''
   }
 
   return {

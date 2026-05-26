@@ -104,7 +104,7 @@ class CustomerServiceImplTest {
   mapperPage.setRecords(List.of(buildCustomer(20L, "分页客户")));
   when(mapper.selectPage(any(Page.class), any())).thenReturn(mapperPage);
 
-  CustomerQuery query = new CustomerQuery(1, 20, null, null, null, null, null, null);
+  CustomerQuery query = new CustomerQuery(1, 20, null, null, null, null, null, null, null, null, null, null, null, null, null);
   PageResult<CustomerVO> result = service.page(query);
 
   assertThat(result.current()).isEqualTo(1);

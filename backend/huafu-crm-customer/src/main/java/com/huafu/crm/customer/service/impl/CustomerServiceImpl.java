@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
-import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -44,23 +43,6 @@ public class CustomerServiceImpl implements CustomerService {
         "unifiedSocialCreditCode", "englishName", "assetType",
         "customerSource", "customerStage", "riskLevel",
         "taxId", "bankName", "bankAccount", "invoiceTitle"
-    );
-
-    // 客户等级：数字 → itemCode
-    private static final Map<Integer, String> LEVEL_MAP = Map.of(
-        1, "AAA", 2, "AA", 3, "A", 4, "B", 5, "C"
-    );
-    // 客户状态：数字 → itemCode
-    private static final Map<Integer, String> STATUS_MAP = Map.of(
-        1, "POTENTIAL", 2, "ACTIVE", 3, "INACTIVE", 4, "LOST", 5, "NEW", 6, "KEY"
-    );
-    // 业务类型：数字 → itemCode
-    private static final Map<Integer, String> BIZ_TYPE_MAP = Map.of(
-        1, "DOMESTIC", 2, "EXPORT", 3, "ENTRADE"
-    );
-    // 客户类型：数字 → itemCode
-    private static final Map<Integer, String> CUST_TYPE_MAP = Map.of(
-        1, "ENTITY", 2, "TRADE", 3, "END_BRAND"
     );
 
     private String safeInput(String val) {
@@ -272,6 +254,17 @@ public class CustomerServiceImpl implements CustomerService {
         if (query.level() != null) qw.eq(Customer::getLevel, query.level());
         if (query.status() != null) qw.eq(Customer::getStatus, query.status());
         if (query.ownerUserId() != null) qw.eq(Customer::getOwnerUserId, query.ownerUserId());
+        if (query.businessType() != null) qw.eq(Customer::getBusinessType, query.businessType());
+        if (query.customerCategory() != null && !query.customerCategory().isBlank())
+            qw.eq(Customer::getCustomerCategory, query.customerCategory());
+        if (query.customerSource() != null && !query.customerSource().isBlank())
+            qw.eq(Customer::getCustomerSource, query.customerSource());
+        if (query.mainCustomerGroup() != null && !query.mainCustomerGroup().isBlank())
+            qw.eq(Customer::getMainCustomerGroup, query.mainCustomerGroup());
+        if (query.customerStage() != null) qw.eq(Customer::getCustomerStage, query.customerStage());
+        if (query.riskLevel() != null) qw.eq(Customer::getRiskLevel, query.riskLevel());
+        if (query.salesMerchandiser() != null && !query.salesMerchandiser().isBlank())
+            qw.like(Customer::getSalesMerchandiser, query.salesMerchandiser());
         // 只查非公海（ownerUserId 不为空）且未删除
         qw.isNotNull(Customer::getOwnerUserId);
         qw.eq(Customer::getDeleted, 0);
@@ -298,6 +291,20 @@ public class CustomerServiceImpl implements CustomerService {
         qw.eq(Customer::getDeleted, 0);
         if (query.customerName() != null && !query.customerName().isBlank())
             qw.like(Customer::getCustomerName, query.customerName());
+        if (query.type() != null) qw.eq(Customer::getType, query.type());
+        if (query.level() != null) qw.eq(Customer::getLevel, query.level());
+        if (query.status() != null) qw.eq(Customer::getStatus, query.status());
+        if (query.businessType() != null) qw.eq(Customer::getBusinessType, query.businessType());
+        if (query.customerCategory() != null && !query.customerCategory().isBlank())
+            qw.eq(Customer::getCustomerCategory, query.customerCategory());
+        if (query.customerSource() != null && !query.customerSource().isBlank())
+            qw.eq(Customer::getCustomerSource, query.customerSource());
+        if (query.mainCustomerGroup() != null && !query.mainCustomerGroup().isBlank())
+            qw.eq(Customer::getMainCustomerGroup, query.mainCustomerGroup());
+        if (query.customerStage() != null) qw.eq(Customer::getCustomerStage, query.customerStage());
+        if (query.riskLevel() != null) qw.eq(Customer::getRiskLevel, query.riskLevel());
+        if (query.salesMerchandiser() != null && !query.salesMerchandiser().isBlank())
+            qw.like(Customer::getSalesMerchandiser, query.salesMerchandiser());
         qw.orderByAsc(Customer::getPublicPoolTime);
         Page<Customer> result = mapper.selectPage(page, qw);
  return new PageResult<>(
@@ -457,11 +464,10 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private CustomerVO toVO(Customer c) {
-        // 数字→itemCode 映射，前端 DictTag 组件需要字符码才能正确显示中文
-        String levelCode = c.getLevel() != null ? LEVEL_MAP.getOrDefault(c.getLevel(), String.valueOf(c.getLevel())) : null;
-        String statusCode = c.getStatus() != null ? STATUS_MAP.getOrDefault(c.getStatus(), String.valueOf(c.getStatus())) : null;
-        String typeCode = c.getType() != null ? CUST_TYPE_MAP.getOrDefault(c.getType(), String.valueOf(c.getType())) : null;
-        String bizTypeCode = c.getBusinessType() != null ? BIZ_TYPE_MAP.getOrDefault(c.getBusinessType(), String.valueOf(c.getBusinessType())) : null;
+        String levelCode = c.getLevel() != null ? String.valueOf(c.getLevel()) : null;
+        String statusCode = c.getStatus() != null ? String.valueOf(c.getStatus()) : null;
+        String typeCode = c.getType() != null ? String.valueOf(c.getType()) : null;
+        String bizTypeCode = c.getBusinessType() != null ? String.valueOf(c.getBusinessType()) : null;
         return new CustomerVO(c.getId(), c.getCustomerCode(), c.getCustomerName(),
             c.getCustomerShortName(), typeCode, levelCode, statusCode,
             c.getProvince(), c.getCity(), c.getDistrict(), c.getAddress(),
