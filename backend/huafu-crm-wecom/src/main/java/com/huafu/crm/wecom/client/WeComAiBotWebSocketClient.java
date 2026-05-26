@@ -16,6 +16,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
@@ -29,6 +30,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class WeComAiBotWebSocketClient implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(WeComAiBotWebSocketClient.class);
     private static final String DEFAULT_WS_URL = "wss://openws.work.weixin.qq.com";
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 30;
+    private static final long HEARTBEAT_TIMEOUT_SECONDS = 90;
 
     private final JdbcTemplate jdbcTemplate;
     private final MessageDispatcher dispatcher;
@@ -43,7 +46,9 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
     });
     private final AtomicReference<WebSocket> webSocket = new AtomicReference<>();
     private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private final AtomicBoolean reconnecting = new AtomicBoolean(false);
     private final AtomicReference<String> subscribeReqId = new AtomicReference<>();
+    private final AtomicReference<Instant> lastInboundAt = new AtomicReference<>(Instant.EPOCH);
     private final String deviceId = UUID.randomUUID().toString().replace("-", "");
 
     public WeComAiBotWebSocketClient(JdbcTemplate jdbcTemplate, MessageDispatcher dispatcher, ObjectMapper objectMapper) {
@@ -59,7 +64,7 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
             return;
         }
         connectSoon(0);
-        executor.scheduleWithFixedDelay(this::sendHeartbeat, 30, 30, TimeUnit.SECONDS);
+        executor.scheduleWithFixedDelay(this::sendHeartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     @PreDestroy
@@ -82,7 +87,10 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
         if (stopping.get()) {
             return;
         }
-        executor.schedule(this::connect, delaySeconds, TimeUnit.SECONDS);
+        executor.schedule(() -> {
+            reconnecting.set(false);
+            connect();
+        }, delaySeconds, TimeUnit.SECONDS);
     }
 
     private void connect() {
@@ -103,6 +111,7 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
                     .buildAsync(URI.create(wsUrl), new Listener())
                     .thenAccept(socket -> {
                         webSocket.set(socket);
+                        lastInboundAt.set(Instant.now());
                         sendSubscribe(socket, botId, secret);
                     })
                     .exceptionally(ex -> {
@@ -140,11 +149,29 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
         if (socket == null || stopping.get()) {
             return;
         }
+        long idleSeconds = Duration.between(lastInboundAt.get(), Instant.now()).getSeconds();
+        if (idleSeconds > HEARTBEAT_TIMEOUT_SECONDS) {
+            log.warn("WeCom AI Bot websocket heartbeat timed out: idleSeconds={}, reconnecting", idleSeconds);
+            reconnect(socket, 3);
+            return;
+        }
         sendJson(socket, Map.of(
                 "cmd", "ping",
                 "headers", Map.of("req_id", reqId("ping")),
                 "body", Map.of()
         ));
+    }
+
+    private void reconnect(WebSocket socket, long delaySeconds) {
+        if (stopping.get() || !reconnecting.compareAndSet(false, true)) {
+            return;
+        }
+        webSocket.compareAndSet(socket, null);
+        try {
+            socket.abort();
+        } catch (Exception ignored) {
+        }
+        connectSoon(delaySeconds);
     }
 
     private void sendJson(WebSocket socket, Object payload) {
@@ -178,6 +205,7 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
         @Override
         public void onOpen(WebSocket webSocket) {
             log.info("WeCom AI Bot websocket opened");
+            lastInboundAt.set(Instant.now());
             WebSocket.Listener.super.onOpen(webSocket);
         }
 
@@ -189,6 +217,7 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
             }
             String payload = textBuffer.toString();
             textBuffer.setLength(0);
+            lastInboundAt.set(Instant.now());
             handlePayload(payload);
             return WebSocket.Listener.super.onText(socket, data, true);
         }
@@ -218,6 +247,9 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
                 JsonNode root = objectMapper.readTree(raw);
                 String cmd = root.path("cmd").asText("");
                 if ("aibot_msg_callback".equals(cmd) || "aibot_callback".equals(cmd)) {
+                    log.info("Received WeCom AI Bot callback: msgId={}, from={}",
+                            root.path("body").path("msgid").asText(""),
+                            root.path("body").path("from").path("userid").asText(""));
                     dispatcher.dispatch(raw);
                     return;
                 }
