@@ -14,10 +14,13 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+
 @Service
 public class AdminUserServiceImpl implements AdminUserService {
     private final UserMapper userMapper;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public AdminUserServiceImpl(UserMapper userMapper) {
         this.userMapper = userMapper;
@@ -103,10 +106,22 @@ public class AdminUserServiceImpl implements AdminUserService {
     public String resetPassword(Long id) {
         User u = userMapper.selectById(id);
         if (u == null) throw new BizException(1001, "用户不存在");
-        String newPwd = "Huafu2026!";
+        String newPwd = randomPassword();
         u.setPassword(passwordEncoder.encode(newPwd));
         userMapper.updateById(u);
         return newPwd;
+    }
+
+    private String randomPassword() {
+        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+        String symbols = "!@#$%";
+        StringBuilder builder = new StringBuilder("Hf");
+        for (int i = 0; i < 10; i++) {
+            builder.append(alphabet.charAt(secureRandom.nextInt(alphabet.length())));
+        }
+        builder.append(symbols.charAt(secureRandom.nextInt(symbols.length())));
+        builder.append(secureRandom.nextInt(10));
+        return builder.toString();
     }
 
     private UserVO toVO(User u) {

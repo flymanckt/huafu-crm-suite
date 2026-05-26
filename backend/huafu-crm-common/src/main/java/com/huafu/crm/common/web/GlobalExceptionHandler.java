@@ -73,20 +73,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handle(Exception ex, HttpServletRequest request) {
         String path = request.getRequestURI();
-        String msg = ex.getMessage();
-
-        // 友好的中文提示，避免暴露 "No static resource" 等技术词汇
-        if (msg == null || msg.isBlank()) {
-            msg = "系统内部错误";
-        } else if (msg.contains("No static resource")) {
+        String msg = "系统内部错误，请联系管理员";
+        String rawMessage = ex.getMessage();
+        if (rawMessage != null && rawMessage.contains("No static resource")) {
             msg = "请求的接口不存在，请检查URL是否正确";
-        } else if (msg.contains("Access Denied") || msg.contains("Access is Denied")) {
+        } else if (rawMessage != null && (rawMessage.contains("Access Denied") || rawMessage.contains("Access is Denied"))) {
             msg = "无权访问该资源";
-        } else if (msg.contains("Connection refused")) {
+        } else if (rawMessage != null && rawMessage.contains("Connection refused")) {
             msg = "后端服务连接失败，请稍后重试";
-        } else if (msg.length() > 100) {
-            // 截断过长的异常信息，避免前端展示问题
-            msg = msg.substring(0, 100) + "...（详情见服务器日志）";
         }
 
         log.error("[未处理异常] path={} type={} message={}", path, ex.getClass().getSimpleName(), ex.getMessage(), ex);

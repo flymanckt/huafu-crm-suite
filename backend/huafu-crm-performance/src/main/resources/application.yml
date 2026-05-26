@@ -2,9 +2,9 @@ spring:
   application:
     name: huafu-crm-performance
   datasource:
-    url: jdbc:postgresql://localhost:5432/huafu_crm
-    username: huafu
-    password: huafu_dev_only
+    url: ${CRM_DB_URL:jdbc:postgresql://localhost:5432/huafu_crm}
+    username: ${CRM_DB_USERNAME:huafu}
+    password: ${CRM_DB_PASSWORD:huafu_dev_only}
   flyway:
     enabled: false
   autoconfigure:
@@ -12,6 +12,7 @@ spring:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
 server:
+  address: ${CRM_SERVICE_ADDRESS:127.0.0.1}
   port: 8083
 mybatis-plus:
   global-config:

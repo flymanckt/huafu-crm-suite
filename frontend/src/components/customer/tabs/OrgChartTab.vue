@@ -98,9 +98,7 @@ const treeData = computed(() => {
   return roots
 })
 
-const handleNodeClick = (data) => {
-  console.log('点击节点:', data)
-}
+const handleNodeClick = () => {}
 </script>
 
 <style scoped>

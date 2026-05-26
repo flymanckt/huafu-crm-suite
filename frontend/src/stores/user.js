@@ -12,20 +12,16 @@ export const useUserStore = defineStore('user', () => {
   async function login(loginForm) {
     try {
       const res = await api.post('/admin/login', loginForm)
-      token.value = res.token || 'mock-token-huafu'
+      if (!res.token) {
+        throw new Error('登录接口未返回有效令牌')
+      }
+      token.value = res.token
       userInfo.value = res.user || { username: loginForm.username, name: loginForm.username }
       localStorage.setItem('token', token.value)
       localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
       return true
-    } catch (e) {
-      // Mock login for demo
-      if (loginForm.username && loginForm.password) {
-        token.value = 'mock-token-huafu'
-        userInfo.value = { username: loginForm.username, name: loginForm.username }
-        localStorage.setItem('token', token.value)
-        localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
-        return true
-      }
+    } catch {
+      logout()
       return false
     }
   }

@@ -66,6 +66,8 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
     private static final Set<String> PARAMETER_MODES = Set.of("SINGLE", "TABLE");
     private static final Set<String> MAPPING_DIRECTIONS = Set.of("OUTBOUND", "INBOUND", "BIDIRECTIONAL");
     private static final Set<String> HTTP_PROTOCOLS = Set.of("REST", "SOAP", "WEBHOOK", "WECOM", "SAP_ODATA");
+    private static final Set<String> HTTP_METHODS = Set.of("GET", "POST", "PUT", "PATCH", "DELETE");
+    private static final Set<String> AUTH_TYPES = Set.of("NONE", "BASIC", "BEARER", "API_KEY");
     private static final Set<String> SUCCESS_RULE_TYPES = Set.of("AUTO", "HTTP_STATUS", "TEXT_CONTAINS", "JSON_FIELD", "XML_FIELD", "SAP_RETURN");
     private static final Set<String> TRIGGER_MODES = Set.of("MANUAL", "ON_CREATE", "ON_UPDATE", "ON_SAVE", "ON_DELETE", "CUSTOM");
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
@@ -1484,7 +1486,7 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         entity.setBusinessModule(InputSanitizer.safeText(dto.businessModule()));
         entity.setSapFunctionName(InputSanitizer.safeText(dto.sapFunctionName()));
         entity.setHttpMethod(InputSanitizer.safeText(dto.httpMethod()));
-        entity.setEndpointPath(InputSanitizer.safeText(dto.endpointPath()));
+        entity.setEndpointPath(safeUrlText(dto.endpointPath()));
         entity.setContentType(InputSanitizer.safeText(dto.contentType()));
         entity.setTriggerMode(StringUtils.hasText(dto.triggerMode()) ? InputSanitizer.safeText(dto.triggerMode()) : "MANUAL");
         entity.setTriggerResource(InputSanitizer.safeText(dto.triggerResource()));
@@ -1542,20 +1544,88 @@ public class IntegrationPlatformServiceImpl implements IntegrationPlatformServic
         if (!StringUtils.hasText(dto.httpMethod()) || !StringUtils.hasText(dto.endpointPath())) {
             throw new BizException(1001, "通用接口需要填写HTTP方法和接口路径");
         }
+        if (!HTTP_METHODS.contains(dto.httpMethod().trim().toUpperCase())) {
+            throw new BizException(1001, "不支持的HTTP方法：" + dto.httpMethod());
+        }
+        if (dto.endpointPath().contains("://") || dto.endpointPath().startsWith("//")) {
+            throw new BizException(1001, "接口路径只能填写相对路径，完整域名请配置在连接Base URL中");
+        }
     }
 
     private IntegrationConnectionConfig toConnection(IntegrationConnectionConfigDTO dto, IntegrationConnectionConfig entity) {
+        validateConnectionConfig(dto);
         entity.setConnectionCode(InputSanitizer.safeText(dto.connectionCode()));
         entity.setConnectionName(InputSanitizer.safeText(dto.connectionName()));
-        entity.setConnectionType(StringUtils.hasText(dto.connectionType()) ? InputSanitizer.safeText(dto.connectionType()) : "REST");
+        entity.setConnectionType(StringUtils.hasText(dto.connectionType()) ? InputSanitizer.safeText(dto.connectionType()).toUpperCase() : "REST");
         entity.setEnabled(dto.enabled() == null ? (short) 1 : dto.enabled());
-        entity.setBaseUrl(InputSanitizer.safeText(dto.baseUrl()));
-        entity.setAuthType(StringUtils.hasText(dto.authType()) ? InputSanitizer.safeText(dto.authType()) : "NONE");
+        entity.setBaseUrl(safeUrlText(dto.baseUrl()));
+        entity.setAuthType(StringUtils.hasText(dto.authType()) ? InputSanitizer.safeText(dto.authType()).toUpperCase() : "NONE");
         entity.setAuthConfig(InputSanitizer.rejectUnsafeHtml(dto.authConfig()));
         entity.setHeaderConfig(InputSanitizer.rejectUnsafeHtml(dto.headerConfig()));
         entity.setTimeoutMs(dto.timeoutMs() == null ? 30000 : dto.timeoutMs());
         entity.setRemark(InputSanitizer.safeText(dto.remark()));
         return entity;
+    }
+
+    private String safeUrlText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        return InputSanitizer.rejectUnsafeHtml(value).trim();
+    }
+
+    private void validateConnectionConfig(IntegrationConnectionConfigDTO dto) {
+        String type = StringUtils.hasText(dto.connectionType()) ? dto.connectionType().trim().toUpperCase() : "REST";
+        String authType = StringUtils.hasText(dto.authType()) ? dto.authType().trim().toUpperCase() : "NONE";
+        if (!SAP_PROTOCOLS.contains(type) && !GENERIC_PROTOCOLS.contains(type)) {
+            throw new BizException(1001, "不支持的连接类型：" + dto.connectionType());
+        }
+        if (!AUTH_TYPES.contains(authType)) {
+            throw new BizException(1001, "不支持的认证方式：" + dto.authType());
+        }
+        if (HTTP_PROTOCOLS.contains(type)) {
+            validateHttpUrl(dto.baseUrl(), "Base URL");
+        }
+        validateJsonObject(dto.authConfig(), "认证配置");
+        validateJsonObject(dto.headerConfig(), "请求头配置");
+        if (dto.timeoutMs() != null && (dto.timeoutMs() < 1000 || dto.timeoutMs() > 120000)) {
+            throw new BizException(1001, "超时时间需在1000到120000毫秒之间");
+        }
+    }
+
+    private void validateHttpUrl(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            throw new BizException(1001, fieldName + "不能为空");
+        }
+        URI uri;
+        try {
+            uri = URI.create(value.trim());
+        } catch (Exception ex) {
+            throw new BizException(1001, fieldName + "格式不正确");
+        }
+        String scheme = uri.getScheme();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            throw new BizException(1001, fieldName + "仅支持HTTP或HTTPS");
+        }
+        if (!StringUtils.hasText(uri.getHost()) || StringUtils.hasText(uri.getUserInfo())) {
+            throw new BizException(1001, fieldName + "不能包含用户凭据，且必须填写主机名");
+        }
+    }
+
+    private void validateJsonObject(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            return;
+        }
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(value);
+            if (!node.isObject()) {
+                throw new BizException(1001, fieldName + "必须是JSON对象");
+            }
+        } catch (BizException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BizException(1001, fieldName + "JSON格式不正确");
+        }
     }
 
     private IntegrationConnectionConfig requireConnection(Long id) {

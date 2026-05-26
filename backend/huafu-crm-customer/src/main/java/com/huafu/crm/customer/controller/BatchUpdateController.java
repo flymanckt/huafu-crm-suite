@@ -211,7 +211,7 @@ public class BatchUpdateController {
             text("description", "description")
         )));
         map.put("system-config", resource("sys_config", Map.ofEntries(
-            text("configValue", "config_value"), text("configGroup", "config_group"),
+            text("configGroup", "config_group"),
             text("type", "type"), text("description", "description")
         )));
         map.put("dict-type", resource("sys_dict_type", "updated_at", Map.ofEntries(

@@ -18,10 +18,14 @@
     "vue": "^3.5.32",
     "vue-router": "^4.6.4",
     "vuedraggable": "^4.1.0",
-    "xlsx": "^0.18.5"
+    "read-excel-file": "^6.0.1",
+    "write-excel-file": "^2.3.10"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
     "vite": "^8.0.10"
+  },
+  "overrides": {
+    "glob": "^10.4.6"
   }
 }

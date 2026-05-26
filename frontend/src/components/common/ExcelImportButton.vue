@@ -13,7 +13,7 @@
       ref="fileInputRef"
       class="file-input"
       type="file"
-      accept=".xlsx,.xls,.csv"
+      accept=".xlsx"
       @change="handleFileChange"
     />
   </div>
@@ -22,7 +22,8 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import * as XLSX from 'xlsx'
+import readXlsxFile from 'read-excel-file'
+import writeXlsxFile from 'write-excel-file'
 
 const props = defineProps({
   fields: { type: Array, required: true },
@@ -44,8 +45,8 @@ function triggerUpload() {
 }
 
 function handleCommand(command) {
-  if (command === 'template') downloadTemplate()
-  if (command === 'export') exportCurrentRows()
+  if (command === 'template') void downloadTemplate()
+  if (command === 'export') void exportCurrentRows()
 }
 
 async function handleFileChange(event) {
@@ -75,10 +76,19 @@ async function handleFileChange(event) {
 }
 
 async function readRows(file) {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
-  const sheet = workbook.Sheets[workbook.SheetNames[0]]
-  return XLSX.utils.sheet_to_json(sheet, { defval: '' })
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    throw new Error('请使用安全的 .xlsx 格式导入，旧版 .xls 请先另存为 .xlsx')
+  }
+  const sheetRows = await readXlsxFile(file)
+  const headers = (sheetRows[0] || []).map(cellToPlainValue)
+  return sheetRows.slice(1).map(row => {
+    const data = {}
+    headers.forEach((header, index) => {
+      if (!header) return
+      data[header] = cellToPlainValue(row[index])
+    })
+    return data
+  }).filter(row => Object.values(row).some(value => !isBlank(value)))
 }
 
 function mapRow(row, rowNumber) {
@@ -106,7 +116,7 @@ function normalizeValue(value, field) {
     return Number.isFinite(number) ? number : value
   }
   if (field.type === 'date') {
-    if (value instanceof Date) return XLSX.SSF.format('yyyy-mm-dd', value)
+    if (value instanceof Date) return formatDate(value)
     return String(value).trim()
   }
   return typeof value === 'string' ? value.trim() : value
@@ -129,13 +139,13 @@ async function importRows(rows) {
   return { success, failed: errors.length, errors }
 }
 
-function downloadTemplate() {
+async function downloadTemplate() {
   const headers = props.fields.map(field => field.label)
   const example = props.fields.map(field => field.example ?? '')
-  writeWorkbook([headers, example], `${props.templateName || props.moduleName}导入模板.xlsx`)
+  await writeWorkbook([headers, example], `${props.templateName || props.moduleName}导入模板.xlsx`)
 }
 
-function exportCurrentRows() {
+async function exportCurrentRows() {
   const rows = props.exportRows || []
   if (!rows.length) {
     ElMessage.warning('当前没有可导出的数据')
@@ -147,14 +157,15 @@ function exportCurrentRows() {
     const source = props.transformExportRow ? props.transformExportRow(row) : row
     return fields.map(field => exportValue(source, field))
   })
-  writeWorkbook([headers, ...data], `${props.exportName || props.moduleName}导出.xlsx`)
+  await writeWorkbook([headers, ...data], `${props.exportName || props.moduleName}导出.xlsx`)
 }
 
-function writeWorkbook(rows, fileName) {
-  const worksheet = XLSX.utils.aoa_to_sheet(rows)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1')
-  XLSX.writeFile(workbook, fileName, { bookType: 'xlsx' })
+async function writeWorkbook(rows, fileName) {
+  const data = rows.map((row, rowIndex) => row.map(value => ({
+    value: value ?? '',
+    fontWeight: rowIndex === 0 ? 'bold' : undefined
+  })))
+  await writeXlsxFile(data, { fileName })
 }
 
 function exportValue(row, field) {
@@ -168,9 +179,22 @@ function exportValue(row, field) {
   return value
 }
 
-function csvCell(value) {
-  const text = value == null ? '' : String(value)
-  return `"${text.replaceAll('"', '""')}"`
+function cellToPlainValue(value) {
+  if (value === null || value === undefined) return ''
+  if (value instanceof Date) return value
+  if (typeof value !== 'object') return value
+  if (Array.isArray(value.richText)) return value.richText.map(item => item.text || '').join('')
+  if (value.text) return value.text
+  if (value.result !== undefined) return cellToPlainValue(value.result)
+  if (value.hyperlink && value.text) return value.text
+  return String(value)
+}
+
+function formatDate(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function isBlank(value) {

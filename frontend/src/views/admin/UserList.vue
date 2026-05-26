@@ -150,10 +150,22 @@ const batchFields = [
 ]
 
 const form = reactive({ username: '', realName: '', phone: '', email: '', deptId: null, roleIds: [], password: '' })
+const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/
+const validatePassword = (rule, value, callback) => {
+  if (!value) {
+    callback(new Error('请输入初始密码'))
+    return
+  }
+  if (!passwordPattern.test(value)) {
+    callback(new Error('密码至少10位，且必须包含大小写字母、数字和特殊字符'))
+    return
+  }
+  callback()
+}
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   realName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入初始密码', trigger: 'blur' }, { min: 6, message: '密码至少6位', trigger: 'blur' }]
+  password: [{ validator: validatePassword, trigger: 'blur' }]
 }
 
 const loadData = async () => {
@@ -208,9 +220,11 @@ const handleSubmit = async () => {
 }
 
 const handleResetPwd = async (id) => {
-  await ElMessageBox.confirm('确定重置该用户密码为默认密码？', '重置密码', { type: 'warning' })
-  await resetUserPassword(id)
-  ElMessage.success('密码已重置为 Huafu@2024')
+  await ElMessageBox.confirm('确定重置该用户密码？系统将生成一个随机临时密码。', '重置密码', { type: 'warning' })
+  const newPassword = await resetUserPassword(id)
+  ElMessageBox.alert(`临时密码：${newPassword}`, '密码已重置', {
+    confirmButtonText: '我已记录'
+  })
 }
 
 const toggleStatus = async (row) => {
