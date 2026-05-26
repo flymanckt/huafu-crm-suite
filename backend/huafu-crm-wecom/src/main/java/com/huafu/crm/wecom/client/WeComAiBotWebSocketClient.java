@@ -49,7 +49,6 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
     private final AtomicBoolean reconnecting = new AtomicBoolean(false);
     private final AtomicReference<String> subscribeReqId = new AtomicReference<>();
     private final AtomicReference<Instant> lastInboundAt = new AtomicReference<>(Instant.EPOCH);
-    private final String deviceId = UUID.randomUUID().toString().replace("-", "");
 
     public WeComAiBotWebSocketClient(JdbcTemplate jdbcTemplate, MessageDispatcher dispatcher, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
@@ -126,15 +125,14 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
     }
 
     private void sendSubscribe(WebSocket socket, String botId, String secret) {
-        String reqId = reqId("subscribe");
+        String reqId = reqId("aibot_subscribe");
         subscribeReqId.set(reqId);
         sendJson(socket, Map.of(
                 "cmd", "aibot_subscribe",
                 "headers", Map.of("req_id", reqId),
                 "body", Map.of(
                         "bot_id", botId,
-                        "secret", secret,
-                        "device_id", deviceId
+                        "secret", secret
                 )
         ));
         executor.schedule(() -> {
@@ -261,8 +259,12 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
                     handleSubscribeAck(root);
                     return;
                 }
+                if (payloadReqId(root).startsWith("ping")) {
+                    return;
+                }
                 if (!"ping".equals(cmd) && !"aibot_event_callback".equals(cmd)) {
-                    log.debug("Ignoring WeCom websocket payload cmd={}", cmd);
+                    log.warn("Ignoring WeCom websocket payload cmd={}, reqId={}, raw={}",
+                            cmd, payloadReqId(root), abbreviate(raw, 500));
                 }
             } catch (Exception ex) {
                 log.debug("Failed to handle WeCom websocket payload: {}", ex.getMessage());
@@ -283,6 +285,13 @@ public class WeComAiBotWebSocketClient implements ApplicationRunner {
 
         private String payloadReqId(JsonNode root) {
             return root.path("headers").path("req_id").asText("");
+        }
+
+        private String abbreviate(String value, int maxLength) {
+            if (value == null || value.length() <= maxLength) {
+                return value;
+            }
+            return value.substring(0, maxLength);
         }
     }
 }
