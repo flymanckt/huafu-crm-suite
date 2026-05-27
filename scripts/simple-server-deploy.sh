@@ -183,9 +183,19 @@ systemctl restart huafu-crm-suite
 
 echo "[server-deploy] 8/8 健康检查"
 sleep 15
-curl -fsS http://127.0.0.1:8080/actuator/health
+if ! curl -fsS http://127.0.0.1:8080/actuator/health; then
+  echo
+  echo "[server-deploy] 网关健康检查失败，输出诊断信息"
+  bash "$APP_DIR/scripts/status-services.sh" || true
+  exit 1
+fi
 echo
-curl -fsS -I http://127.0.0.1/ | head -n 1
+if ! curl -fsS -I http://127.0.0.1/ | head -n 1; then
+  echo
+  echo "[server-deploy] 前端访问检查失败，输出诊断信息"
+  bash "$APP_DIR/scripts/status-services.sh" || true
+  exit 1
+fi
 echo
 echo "[server-deploy] 部署完成"
 echo "访问地址：http://服务器IP/"
