@@ -79,6 +79,26 @@ cd /home/kent/.hermes/profiles/dev/workspace/huafu-crm-suite
 SKIP_TESTS=0 ./scripts/build-all.sh
 ```
 
+## 小白一键部署到服务器
+
+如果要通过堡垒机部署到一台 Ubuntu 服务器，直接使用小白部署脚本：
+
+```bash
+cd /home/kent/.hermes/profiles/dev/workspace/huafu-crm-suite
+chmod +x scripts/simple-deploy.sh scripts/simple-server-install.sh
+bash scripts/simple-deploy.sh
+```
+
+脚本会询问堡垒机地址、CRM 服务器地址、部署目录和访问域名/IP，然后自动完成构建、上传、安装 Java/Nginx/PostgreSQL、初始化数据库、配置 systemd、发布前端和启动后端。
+
+详细说明见：[华孚 CRM 小白部署说明](docs/simple_deploy.md)。
+
+如果你想手动上传项目到服务器，不走脚本上传，也可以在服务器项目目录执行：
+
+```bash
+sudo bash scripts/simple-server-deploy.sh
+```
+
 ## 本机部署
 
 ```bash
