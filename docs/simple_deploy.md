@@ -80,6 +80,20 @@ git pull
 sudo bash scripts/simple-server-deploy.sh
 ```
 
+如果安装 Node.js 22 时出现 `trying to overwrite '/usr/include/node/common.gypi'`，说明服务器残留了 Ubuntu 自带的 Node 12 开发包。先执行：
+
+```bash
+sudo apt-get remove -y nodejs npm nodejs-doc libnode-dev libnode72
+sudo dpkg --remove --force-depends nodejs npm nodejs-doc libnode-dev libnode72 || true
+sudo apt-get -f install -y
+```
+
+然后重新执行：
+
+```bash
+sudo bash scripts/simple-server-deploy.sh
+```
+
 ## 以后更新系统
 
 自动上传方式还是执行同一个命令：

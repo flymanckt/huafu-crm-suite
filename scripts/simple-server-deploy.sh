@@ -40,7 +40,10 @@ install_nodejs_22() {
     return
   fi
   echo "[server-deploy] 安装 Node.js 22，当前版本：$(node -v 2>/dev/null || echo 未安装)"
-  apt-get remove -y nodejs npm || true
+  apt-get remove -y nodejs npm nodejs-doc libnode-dev libnode72 || true
+  dpkg --remove --force-depends nodejs npm nodejs-doc libnode-dev libnode72 2>/dev/null || true
+  apt-get -f install -y || true
+  apt-get autoremove -y || true
   apt-get install -y ca-certificates curl gnupg
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
