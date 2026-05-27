@@ -1,5 +1,116 @@
 -- Seed SAP organization dictionaries used by the customer SAP organization tab.
 
+CREATE SEQUENCE IF NOT EXISTS seq_dict_type START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS seq_dict_item START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS seq_user_column_config START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS seq_user_filter_config START WITH 1 INCREMENT BY 1;
+
+CREATE TABLE IF NOT EXISTS sys_dict_type (
+    id BIGINT NOT NULL DEFAULT nextval('seq_dict_type'),
+    dict_code VARCHAR(64) NOT NULL,
+    dict_name VARCHAR(128) NOT NULL,
+    dict_type VARCHAR(32) NOT NULL,
+    description VARCHAR(256),
+    sort_order INT DEFAULT 0,
+    status SMALLINT DEFAULT 1,
+    created_by BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted SMALLINT DEFAULT 0,
+    version INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sys_dict_item (
+    id BIGINT NOT NULL DEFAULT nextval('seq_dict_item'),
+    dict_id BIGINT NOT NULL,
+    item_code VARCHAR(64) NOT NULL,
+    item_name VARCHAR(128) NOT NULL,
+    item_value VARCHAR(256),
+    sort_order INT DEFAULT 0,
+    status SMALLINT DEFAULT 1,
+    default_flag SMALLINT DEFAULT 0,
+    show_code SMALLINT DEFAULT 1,
+    description VARCHAR(256),
+    color VARCHAR(32),
+    css_class VARCHAR(64),
+    created_by BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted SMALLINT DEFAULT 0,
+    version INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sys_user_column_config (
+    id BIGINT NOT NULL DEFAULT nextval('seq_user_column_config'),
+    user_id BIGINT NOT NULL,
+    page_code VARCHAR(64) NOT NULL,
+    column_configs TEXT NOT NULL,
+    is_default SMALLINT DEFAULT 0,
+    config_name VARCHAR(64),
+    created_by BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    version INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sys_user_filter_config (
+    id BIGINT NOT NULL DEFAULT nextval('seq_user_filter_config'),
+    user_id BIGINT NOT NULL,
+    page_code VARCHAR(64) NOT NULL,
+    filter_configs TEXT NOT NULL,
+    config_name VARCHAR(64),
+    is_default SMALLINT DEFAULT 0,
+    created_by BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    version INT DEFAULT 0
+);
+
+ALTER TABLE sys_dict_type ALTER COLUMN id SET DEFAULT nextval('seq_dict_type');
+ALTER TABLE sys_dict_item ALTER COLUMN id SET DEFAULT nextval('seq_dict_item');
+ALTER TABLE sys_user_column_config ALTER COLUMN id SET DEFAULT nextval('seq_user_column_config');
+ALTER TABLE sys_user_filter_config ALTER COLUMN id SET DEFAULT nextval('seq_user_filter_config');
+
+ALTER TABLE sys_dict_item ADD COLUMN IF NOT EXISTS show_code SMALLINT DEFAULT 1;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sys_dict_type'::regclass AND contype = 'p') THEN
+        ALTER TABLE sys_dict_type ADD CONSTRAINT pk_sys_dict_type PRIMARY KEY (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_dict_code') THEN
+        ALTER TABLE sys_dict_type ADD CONSTRAINT uk_dict_code UNIQUE (dict_code);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sys_dict_item'::regclass AND contype = 'p') THEN
+        ALTER TABLE sys_dict_item ADD CONSTRAINT pk_sys_dict_item PRIMARY KEY (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_dict_id_item_code') THEN
+        ALTER TABLE sys_dict_item ADD CONSTRAINT uk_dict_id_item_code UNIQUE (dict_id, item_code);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sys_user_column_config'::regclass AND contype = 'p') THEN
+        ALTER TABLE sys_user_column_config ADD CONSTRAINT pk_sys_user_column_config PRIMARY KEY (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_user_page') THEN
+        ALTER TABLE sys_user_column_config ADD CONSTRAINT uk_user_page UNIQUE (user_id, page_code, config_name);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sys_user_filter_config'::regclass AND contype = 'p') THEN
+        ALTER TABLE sys_user_filter_config ADD CONSTRAINT pk_sys_user_filter_config PRIMARY KEY (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_user_page_name') THEN
+        ALTER TABLE sys_user_filter_config ADD CONSTRAINT uk_user_page_name UNIQUE (user_id, page_code, config_name);
+    END IF;
+END
+$$;
+
+SELECT setval('seq_dict_type', GREATEST((SELECT COALESCE(MAX(id), 0) + 1 FROM sys_dict_type), 1), false);
+SELECT setval('seq_dict_item', GREATEST((SELECT COALESCE(MAX(id), 0) + 1 FROM sys_dict_item), 1), false);
+SELECT setval('seq_user_column_config', GREATEST((SELECT COALESCE(MAX(id), 0) + 1 FROM sys_user_column_config), 1), false);
+SELECT setval('seq_user_filter_config', GREATEST((SELECT COALESCE(MAX(id), 0) + 1 FROM sys_user_filter_config), 1), false);
+
 INSERT INTO sys_dict_type (dict_code, dict_name, dict_type, description, sort_order, status, deleted)
 VALUES
 ('company_code', '公司代码', 'sap_org', 'SAP组织公司代码', 100, 1, 0),
