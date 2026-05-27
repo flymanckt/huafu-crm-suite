@@ -28,6 +28,26 @@ random_text() {
   fi
 }
 
+install_nodejs_22() {
+  local major=0
+  local minor=0
+  if command -v node >/dev/null 2>&1; then
+    major="$(node -v | sed 's/^v//' | cut -d. -f1)"
+    minor="$(node -v | sed 's/^v//' | cut -d. -f2)"
+  fi
+  if [[ "$major" -gt 22 || ( "$major" -eq 22 && "$minor" -ge 12 ) ]]; then
+    echo "[server-deploy] Node.js $(node -v) 已满足要求"
+    return
+  fi
+  echo "[server-deploy] 安装 Node.js 22，当前版本：$(node -v 2>/dev/null || echo 未安装)"
+  apt-get remove -y nodejs npm || true
+  apt-get install -y ca-certificates curl gnupg
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+  node -v
+  npm -v
+}
+
 copy_to_app_dir() {
   if [[ "$SOURCE_DIR" == "$APP_DIR" ]]; then
     return
@@ -51,7 +71,8 @@ copy_to_app_dir() {
 echo "[server-deploy] 1/8 安装基础软件"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y openjdk-21-jdk maven nodejs npm nginx postgresql postgresql-contrib curl procps psmisc openssl
+apt-get install -y openjdk-21-jdk maven nginx postgresql postgresql-contrib curl procps psmisc openssl
+install_nodejs_22
 
 echo "[server-deploy] 2/8 准备项目目录"
 copy_to_app_dir

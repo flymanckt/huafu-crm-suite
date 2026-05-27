@@ -67,6 +67,19 @@ SERVER_NAME="crm.your-domain.com" sudo -E bash scripts/simple-server-deploy.sh
 APP_DIR="/data/huafu-crm-suite" sudo -E bash scripts/simple-server-deploy.sh
 ```
 
+脚本会自动安装 Node.js 22。前端构建不能使用系统自带的 Node.js 12，否则会报：
+
+```text
+SyntaxError: Unexpected token '.'
+```
+
+如果你已经遇到这个错误，拉取最新代码后重新执行：
+
+```bash
+git pull
+sudo bash scripts/simple-server-deploy.sh
+```
+
 ## 以后更新系统
 
 自动上传方式还是执行同一个命令：
