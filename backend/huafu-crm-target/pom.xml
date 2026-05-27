@@ -51,7 +51,10 @@
    <plugin>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-maven-plugin</artifactId>
-    <configuration><skip>false</skip></configuration>
+    <configuration>
+     <skip>false</skip>
+     <mainClass>com.huafu.crm.target.TargetApplication</mainClass>
+    </configuration>
    </plugin>
   </plugins>
  </build>

@@ -50,6 +50,7 @@
                 <configuration>
                     <!-- Keep the main artifact as a normal dependency jar; attach executable jar separately. -->
                     <classifier>exec</classifier>
+                    <mainClass>com.huafu.crm.ai.AiApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>
