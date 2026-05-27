@@ -18,5 +18,6 @@ public record UserCreateDTO(
     String email,
     Long deptId,
     String post,
-    Integer status
+    Integer status,
+    java.util.List<Long> roleIds
 ) {}

@@ -1,5 +1,7 @@
 # Maven / Java build outputs
 **/target/
+!huafu-crm-target/src/main/java/com/huafu/crm/target/
+!huafu-crm-target/src/main/java/com/huafu/crm/target/**
 *.class
 *.jar
 *.war

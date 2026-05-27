@@ -1,6 +1,13 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+const clearLoginSession = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('userInfo')
+  localStorage.removeItem('userId')
+  localStorage.removeItem('userName')
+}
+
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 15000,
@@ -38,8 +45,7 @@ request.interceptors.response.use(
     const res = response.data
     // Gateway HTTP-level 401
     if (response.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('userInfo')
+      clearLoginSession()
       window.location.href = '/login'
       return Promise.reject(new Error('未登录或登录已过期'))
     }
@@ -47,8 +53,7 @@ request.interceptors.response.use(
     if (res.code !== 200) {
       // 401 business code → also logout
       if (res.code === 401) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('userInfo')
+        clearLoginSession()
         window.location.href = '/login'
       }
       ElMessage.error(res.message || '请求失败')
@@ -58,8 +63,7 @@ request.interceptors.response.use(
   },
   error => {
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('userInfo')
+      clearLoginSession()
       window.location.href = '/login'
     }
     ElMessage.error(error.message || '网络错误')

@@ -59,6 +59,7 @@ copy_to_app_dir() {
   mkdir -p "$APP_DIR"
   tar -C "$SOURCE_DIR" \
     --exclude='.git' \
+    --exclude='config' \
     --exclude='frontend/node_modules' \
     --exclude='frontend/dist' \
     --exclude='logs' \

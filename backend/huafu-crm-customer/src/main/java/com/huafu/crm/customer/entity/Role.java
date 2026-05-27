@@ -10,6 +10,8 @@ public class Role {
     private String roleName;
     private String roleKey;
     private String description;
+    private Integer status;
+    private Integer dataScope;
     @TableField(fill = FieldFill.INSERT) private String createdBy;
     @TableField(fill = FieldFill.INSERT) private OffsetDateTime createdTime;
     @TableField(fill = FieldFill.INSERT_UPDATE) private String updatedBy;
@@ -22,6 +24,8 @@ public class Role {
     public String getRoleName() { return roleName; } public void setRoleName(String v) { this.roleName = v; }
     public String getRoleKey() { return roleKey; } public void setRoleKey(String v) { this.roleKey = v; }
     public String getDescription() { return description; } public void setDescription(String v) { this.description = v; }
+    public Integer getStatus() { return status; } public void setStatus(Integer v) { this.status = v; }
+    public Integer getDataScope() { return dataScope; } public void setDataScope(Integer v) { this.dataScope = v; }
     public String getCreatedBy() { return createdBy; } public void setCreatedBy(String v) { this.createdBy = v; }
     public OffsetDateTime getCreatedTime() { return createdTime; } public void setCreatedTime(OffsetDateTime v) { this.createdTime = v; }
     public String getUpdatedBy() { return updatedBy; } public void setUpdatedBy(String v) { this.updatedBy = v; }

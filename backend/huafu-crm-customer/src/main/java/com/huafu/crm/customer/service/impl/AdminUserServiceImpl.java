@@ -7,7 +7,13 @@ import com.huafu.crm.common.exception.BizException;
 import com.huafu.crm.customer.dto.UserCreateDTO;
 import com.huafu.crm.customer.dto.UserUpdateDTO;
 import com.huafu.crm.customer.dto.UserVO;
+import com.huafu.crm.customer.entity.Dept;
+import com.huafu.crm.customer.entity.Role;
 import com.huafu.crm.customer.entity.User;
+import com.huafu.crm.customer.entity.UserRole;
+import com.huafu.crm.customer.mapper.DeptMapper;
+import com.huafu.crm.customer.mapper.RoleMapper;
+import com.huafu.crm.customer.mapper.UserRoleMapper;
 import com.huafu.crm.customer.mapper.UserMapper;
 import com.huafu.crm.customer.service.AdminUserService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -15,15 +21,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class AdminUserServiceImpl implements AdminUserService {
     private final UserMapper userMapper;
+    private final RoleMapper roleMapper;
+    private final UserRoleMapper userRoleMapper;
+    private final DeptMapper deptMapper;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public AdminUserServiceImpl(UserMapper userMapper) {
+    public AdminUserServiceImpl(
+            UserMapper userMapper,
+            RoleMapper roleMapper,
+            UserRoleMapper userRoleMapper,
+            DeptMapper deptMapper) {
         this.userMapper = userMapper;
+        this.roleMapper = roleMapper;
+        this.userRoleMapper = userRoleMapper;
+        this.deptMapper = deptMapper;
     }
 
     @Override
@@ -43,7 +63,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         u.setLoginCount(0);
         if (u.getTenantId() == null) u.setTenantId(1L);
         userMapper.insert(u);
-        return toVO(u);
+        updateUserRoles(u.getId(), dto.roleIds());
+        return toVO(userMapper.selectById(u.getId()));
     }
 
     @Override
@@ -58,6 +79,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (dto.post() != null) u.setPost(dto.post());
         if (dto.status() != null) u.setStatus(dto.status());
         userMapper.updateById(u);
+        if (dto.roleIds() != null) updateUserRoles(id, dto.roleIds());
         return toVO(userMapper.selectById(id));
     }
 
@@ -89,6 +111,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void delete(Long id) {
         User u = userMapper.selectById(id);
         if (u == null) throw new BizException(1001, "用户不存在");
+        userRoleMapper.delete(new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, id));
         userMapper.deleteById(id);
     }
 
@@ -124,9 +147,34 @@ public class AdminUserServiceImpl implements AdminUserService {
         return builder.toString();
     }
 
+    private void updateUserRoles(Long userId, List<Long> roleIds) {
+        userRoleMapper.delete(new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));
+        if (roleIds == null || roleIds.isEmpty()) return;
+        List<Role> roles = roleMapper.selectBatchIds(roleIds);
+        Map<Long, Role> validRoles = roles.stream()
+            .filter(role -> role.getStatus() == null || role.getStatus() == 1)
+            .collect(Collectors.toMap(Role::getId, Function.identity()));
+        for (Long roleId : roleIds.stream().distinct().toList()) {
+            if (!validRoles.containsKey(roleId)) continue;
+            UserRole userRole = new UserRole();
+            userRole.setUserId(userId);
+            userRole.setRoleId(roleId);
+            userRole.setTenantId(1L);
+            userRoleMapper.insert(userRole);
+        }
+    }
+
     private UserVO toVO(User u) {
+        List<UserRole> userRoles = userRoleMapper.selectList(
+            new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, u.getId()));
+        List<Long> roleIds = userRoles.stream().map(UserRole::getRoleId).distinct().toList();
+        List<Role> roles = roleIds.isEmpty() ? List.of() : roleMapper.selectBatchIds(roleIds);
+        List<String> roleNames = roles.stream().map(Role::getRoleName).toList();
+        List<String> roleKeys = roles.stream().map(Role::getRoleKey).toList();
+        Dept dept = u.getDeptId() == null ? null : deptMapper.selectById(u.getDeptId());
         return new UserVO(u.getId(), u.getUsername(), u.getRealName(), u.getPhone(), u.getEmail(),
-            u.getDeptId(), u.getPost(), u.getStatus(), u.getLastLoginTime(), u.getLastLoginIp(),
+            u.getDeptId(), dept == null ? null : dept.getDeptName(), u.getPost(), u.getStatus(),
+            roleIds, roleNames, roleKeys, u.getLastLoginTime(), u.getLastLoginIp(),
             u.getLoginCount(), u.getCreatedTime());
     }
 }

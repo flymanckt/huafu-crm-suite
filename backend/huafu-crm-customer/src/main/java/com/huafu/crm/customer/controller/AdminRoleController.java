@@ -5,6 +5,7 @@ import com.huafu.crm.common.api.Result;
 import com.huafu.crm.customer.dto.RoleCreateDTO;
 import com.huafu.crm.customer.dto.RoleUpdateDTO;
 import com.huafu.crm.customer.dto.RoleVO;
+import com.huafu.crm.customer.dto.MenuNodeVO;
 import com.huafu.crm.customer.service.AdminRoleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,9 +37,12 @@ public class AdminRoleController {
     @Operation(summary = "分页查询角色")
     public Result<PageResult<RoleVO>> page(
             @RequestParam(required = false) String roleName,
+            @RequestParam(required = false) String roleKey,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) Integer dataScope,
             @RequestParam(defaultValue = "1") long current,
             @RequestParam(defaultValue = "10") long size) {
-        return Result.ok(service.page(roleName, current, size));
+        return Result.ok(service.page(roleName, roleKey, status, dataScope, current, size));
     }
 
     @PutMapping("/{id}")
@@ -58,6 +62,12 @@ public class AdminRoleController {
     @Operation(summary = "获取角色菜单ID列表")
     public Result<List<Long>> getMenus(@PathVariable Long id) {
         return Result.ok(service.getMenuIds(id));
+    }
+
+    @GetMapping("/menus/tree")
+    @Operation(summary = "获取系统菜单权限树")
+    public Result<List<MenuNodeVO>> menuTree() {
+        return Result.ok(service.menuTree());
     }
 
     @PutMapping("/{id}/menus")

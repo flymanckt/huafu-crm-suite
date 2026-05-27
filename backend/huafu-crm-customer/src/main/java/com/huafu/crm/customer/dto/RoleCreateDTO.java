@@ -5,5 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 public record RoleCreateDTO(
     @NotBlank String roleName,
     @NotBlank String roleKey,
-    String description
+    String description,
+    Integer status,
+    Integer dataScope,
+    java.util.List<Long> menuIds
 ) {}

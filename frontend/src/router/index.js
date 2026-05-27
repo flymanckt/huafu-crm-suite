@@ -100,39 +100,39 @@ const routes = [
         path: 'admin/user',
         name: 'AdminUser',
         component: () => import('../views/admin/UserList.vue'),
-        meta: { title: '用户管理' }
+        meta: { title: '用户管理', permission: 'admin:user' }
       },
       {
         path: 'admin/role',
         name: 'AdminRole',
         component: () => import('../views/admin/RoleList.vue'),
-        meta: { title: '角色管理' }
+        meta: { title: '角色管理', permission: 'admin:role' }
       },
       {
         path: 'admin/dept',
         name: 'AdminDept',
         component: () => import('../views/admin/DeptTree.vue'),
-        meta: { title: '部门管理' }
+        meta: { title: '部门管理', permission: 'admin:dept' }
       },
       // 数据字典
       {
         path: 'system/dict',
         name: 'DictManagement',
         component: () => import('../views/system/DictManagement.vue'),
-        meta: { title: '数据字典' }
+        meta: { title: '数据字典', permission: 'system:dict' }
       },
       // 系统配置
       {
         path: 'system/config',
         name: 'SystemConfig',
         component: () => import('../views/system/SystemConfig.vue'),
-        meta: { title: '系统配置' }
+        meta: { title: '系统配置', permission: 'system:config' }
       },
       {
         path: 'system/integration',
         name: 'IntegrationPlatform',
         component: () => import('../views/system/IntegrationPlatform.vue'),
-        meta: { title: '集成平台' }
+        meta: { title: '集成平台', permission: 'system:integration' }
       },
       // 勤力度
       {
@@ -158,7 +158,7 @@ const routes = [
         path: 'wecom/message',
         name: 'MessageLogList',
         component: () => import('../views/wecom/MessageLogList.vue'),
-        meta: { title: '消息日志' }
+        meta: { title: '消息日志', permission: 'wecom:message' }
       },
       // AI解析
       {
@@ -180,12 +180,40 @@ const router = createRouter({
   routes
 })
 
+const getPermissions = () => {
+  try {
+    return JSON.parse(localStorage.getItem('userInfo') || '{}').permissions || []
+  } catch {
+    return []
+  }
+}
+
+const isSuperAdmin = () => {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    const permissions = userInfo.permissions || []
+    const roleKeys = userInfo.roleKeys || []
+    return userInfo.username === 'admin' || permissions.includes('*') || roleKeys.includes('ROLE_ADMIN')
+  } catch {
+    return false
+  }
+}
+
+const hasPermission = permission => {
+  if (!permission) return true
+  if (isSuperAdmin()) return true
+  const permissions = getPermissions()
+  return permissions.includes('*') || permissions.includes(permission)
+}
+
 // 导航守卫
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   if (to.path !== '/login' && !token) {
     next('/login')
   } else if (to.path === '/login' && token) {
+    next('/dashboard')
+  } else if (to.meta.permission && !hasPermission(to.meta.permission)) {
     next('/dashboard')
   } else {
     next()

@@ -17,7 +17,7 @@ export function deleteUser(id) {
   return request.delete(`/admin/user/${id}`)
 }
 export function resetUserPassword(id) {
-  return request.post(`/admin/user/${id}/reset-password`)
+  return request.put(`/admin/user/${id}/reset-password`)
 }
 export function toggleUserStatus(id, status) {
   return request.put(`/admin/user/${id}/status`, null, { params: { status } })
@@ -41,6 +41,9 @@ export function deleteRole(id) {
 }
 export function getRoleMenus(roleId) {
   return request.get(`/admin/role/${roleId}/menus`)
+}
+export function getMenuTree() {
+  return request.get('/admin/role/menus/tree')
 }
 export function updateRoleMenus(roleId, menuIds) {
   return request.put(`/admin/role/${roleId}/menus`, menuIds)

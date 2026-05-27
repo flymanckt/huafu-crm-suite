@@ -60,9 +60,15 @@ echo
 echo "== api checks =="
 curl -i --max-time 5 http://127.0.0.1:8080/actuator/health || true
 echo
-curl -i --max-time 5 http://127.0.0.1:8081/actuator/health || true
+if check_port 8081; then
+  echo "customer port 8081 is listening"
+else
+  echo "customer port 8081 is down"
+fi
 echo
-curl -i --max-time 5 http://127.0.0.1/api/auth/login || true
+curl -i --max-time 5 -X POST http://127.0.0.1/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"Huafu2026!"}' || true
 echo
 
 echo "== recent logs =="

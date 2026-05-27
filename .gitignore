@@ -2,6 +2,8 @@
 **/target/
 !frontend/src/views/target/
 !frontend/src/views/target/**
+!backend/huafu-crm-target/src/main/java/com/huafu/crm/target/
+!backend/huafu-crm-target/src/main/java/com/huafu/crm/target/**
 frontend/dist/
 frontend/node_modules/
 

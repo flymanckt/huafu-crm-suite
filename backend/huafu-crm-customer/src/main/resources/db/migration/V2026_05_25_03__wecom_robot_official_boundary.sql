@@ -1,4 +1,21 @@
 -- Align WeCom configuration with group robot webhook semantics.
+CREATE TABLE IF NOT EXISTS sys_config (
+    id BIGSERIAL PRIMARY KEY,
+    config_key VARCHAR(128) NOT NULL UNIQUE,
+    config_value TEXT,
+    config_name VARCHAR(255),
+    config_group VARCHAR(64) NOT NULL DEFAULT 'SYSTEM',
+    description VARCHAR(500),
+    type VARCHAR(32) NOT NULL DEFAULT 'STRING',
+    editable BOOLEAN NOT NULL DEFAULT TRUE,
+    visible BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by BIGINT,
+    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted SMALLINT DEFAULT 0
+);
+
 INSERT INTO sys_config(config_key, config_value, config_name, config_group, type, editable, visible, description)
 VALUES
 ('wecom.robot_supported_msg_types', 'text,markdown,image,file,news', '企微群机器人支持消息类型', 'WECOM', 'STRING', true, true, '群机器人Webhook可发送的消息类型；完整msgtype消息体会按企微官方格式原样发送'),

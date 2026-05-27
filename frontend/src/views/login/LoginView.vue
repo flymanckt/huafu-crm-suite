@@ -38,7 +38,11 @@ const handleLogin = async () => {
     })
     // res 是 LoginVO { token, user }
     localStorage.setItem('token', res.token)
-    localStorage.setItem('userInfo', JSON.stringify(res.user || { username: form.value.username }))
+    const user = res.user || { username: form.value.username }
+    const displayName = user.realName || user.username || form.value.username
+    localStorage.setItem('userInfo', JSON.stringify(user))
+    if (user.id) localStorage.setItem('userId', String(user.id))
+    localStorage.setItem('userName', displayName)
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch (e) {
