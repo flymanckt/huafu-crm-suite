@@ -1,5 +1,7 @@
 # Build outputs
 **/target/
+!frontend/src/views/target/
+!frontend/src/views/target/**
 frontend/dist/
 frontend/node_modules/
 
